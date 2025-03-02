@@ -37,8 +37,8 @@ class HomeScreen extends StatelessWidget {
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
                           colors: [
-                           const Color(0xFF026670),  // Darker teal
-                           const Color(0xFF02838A),  // Main teal
+                            const Color(0xFF026670), // Darker teal
+                            const Color(0xFF02838A), // Main teal
                           ],
                         ),
                       ),
@@ -58,12 +58,12 @@ class HomeScreen extends StatelessWidget {
                     ),
                   ),
                 ),
-                
+
                 // Summary Stats
                 SliverToBoxAdapter(
                   child: _buildSummaryStats(context, palletModel),
                 ),
-                
+
                 // Quick Actions
                 SliverToBoxAdapter(
                   child: Padding(
@@ -86,7 +86,7 @@ class HomeScreen extends StatelessWidget {
                     ),
                   ),
                 ),
-                
+
                 // Analytics Section
                 SliverToBoxAdapter(
                   child: Padding(
@@ -103,18 +103,19 @@ class HomeScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 16),
                         _buildAnalyticsCard(
-                          context, 
+                          context,
                           palletModel,
                           onTap: () => Navigator.push(
                             context,
-                            MaterialPageRoute(builder: (context) => const AnalyticsScreen()),
+                            MaterialPageRoute(
+                                builder: (context) => const AnalyticsScreen()),
                           ),
                         ),
                       ],
                     ),
                   ),
                 ),
-                
+
                 // Recent Activity
                 SliverToBoxAdapter(
                   child: Padding(
@@ -147,53 +148,52 @@ class HomeScreen extends StatelessWidget {
     final profit = model.totalProfit;
     final totalPallets = model.pallets.length;
     final itemsSold = model.totalSoldItems;
-    
-    return Card(
-      elevation: 3,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
+
+    return Container(
+      padding: const EdgeInsets.all(16),
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
-        child: IntrinsicHeight(
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              _buildStatItem(
-                label: "Total Profit",
-                value: "\${profit.toStringAsFixed(2)}",
-                color: profit >= 0 ? Colors.green.shade600 : Colors.red.shade600,
-                icon: profit >= 0 ? Icons.trending_up : Icons.trending_down,
-                iconBackground: profit >= 0 ? Colors.green.shade50 : Colors.red.shade50,
-              ),
-              const VerticalDivider(
-                thickness: 1,
-                width: 1,
-                color: Color(0xFFEEEEEE),
-              ),
-              _buildStatItem(
-                label: "Pallets",
-                value: totalPallets.toString(),
-                color: Colors.blue.shade600,
-                icon: Icons.inventory_2_outlined,
-                iconBackground: Colors.blue.shade50,
-              ),
-              const VerticalDivider(
-                thickness: 1,
-                width: 1,
-                color: Color(0xFFEEEEEE),
-              ),
-              _buildStatItem(
-                label: "Items Sold",
-                value: itemsSold.toString(),
-                color: Colors.orange.shade700,
-                icon: Icons.sell_outlined,
-                iconBackground: Colors.orange.shade50,
-              ),
-            ],
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.1),
+            spreadRadius: 1,
+            blurRadius: 5,
+            offset: const Offset(0, 3),
           ),
-        ),
+        ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _buildStatItem(
+            label: "Total Profit",
+            value: "\$${profit.toStringAsFixed(2)}",
+            color: profit >= 0 ? Colors.green : Colors.red,
+            icon: Icons.trending_up,
+          ),
+          const SizedBox(
+            height: 40,
+            child: VerticalDivider(thickness: 1),
+          ),
+          _buildStatItem(
+            label: "Pallets",
+            value: totalPallets.toString(),
+            color: Colors.blue,
+            icon: Icons.inventory_2,
+          ),
+          const SizedBox(
+            height: 40,
+            child: VerticalDivider(thickness: 1),
+          ),
+          _buildStatItem(
+            label: "Items Sold",
+            value: itemsSold.toString(),
+            color: Colors.orange,
+            icon: Icons.sell,
+          ),
+        ],
       ),
     );
   }
@@ -203,89 +203,66 @@ class HomeScreen extends StatelessWidget {
     required String value,
     required Color color,
     required IconData icon,
-    required Color iconBackground,
   }) {
-    return Expanded(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Enhanced icon with background
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: iconBackground,
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, color: color, size: 20),
+    return Column(
+      children: [
+        Icon(icon, color: color, size: 24),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: color,
           ),
-          const SizedBox(height: 8),
-          // Value with better visibility
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: color,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+        ),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 12,
+            color: Colors.grey,
           ),
-          const SizedBox(height: 4),
-          // Label with better contrast
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey.shade700,
-              fontWeight: FontWeight.w500,
-            ),
-            textAlign: TextAlign.center,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
   // Enhanced method for building quick action cards with better visual cues
   Widget _buildQuickActionCards(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return Row(
-          children: [
-            Expanded(
-              child: _buildActionCard(
+    return LayoutBuilder(builder: (context, constraints) {
+      return Row(
+        children: [
+          Expanded(
+            child: _buildActionCard(
+              context,
+              icon: Icons.inventory_2_outlined,
+              title: "Manage Inventory",
+              subtitle: "Browse and track items",
+              color: Colors.blue.shade600,
+              maxWidth: constraints.maxWidth / 2 - 8,
+              onTap: () => Navigator.push(
                 context,
-                icon: Icons.inventory_2_outlined,
-                title: "Manage Inventory",
-                subtitle: "Browse and track items",
-                color: Colors.blue.shade600,
-                maxWidth: constraints.maxWidth / 2 - 8,
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const inventory.InventoryScreen(),
-                  ),
+                MaterialPageRoute(
+                  builder: (context) => const inventory.InventoryScreen(),
                 ),
               ),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _buildActionCard(
-                context,
-                icon: Icons.add_box_rounded,
-                title: "Add Pallet",
-                subtitle: "Create new inventory",
-                color: Colors.green.shade600,
-                maxWidth: constraints.maxWidth / 2 - 8,
-                onTap: () => showAddPalletDialog(context),
-              ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: _buildActionCard(
+              context,
+              icon: Icons.add_box_rounded,
+              title: "Add Pallet",
+              subtitle: "Create new inventory",
+              color: Colors.green.shade600,
+              maxWidth: constraints.maxWidth / 2 - 8,
+              onTap: () => showAddPalletDialog(context),
             ),
-          ],
-        );
-      }
-    );
+          ),
+        ],
+      );
+    });
   }
 
   Widget _buildActionCard(
@@ -322,8 +299,8 @@ class HomeScreen extends StatelessWidget {
                 ),
                 child: Center(
                   child: Icon(
-                    icon, 
-                    color: color, 
+                    icon,
+                    color: color,
                     size: 28,
                   ),
                 ),
@@ -358,8 +335,8 @@ class HomeScreen extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
-                    Icons.touch_app, 
-                    size: 14, 
+                    Icons.touch_app,
+                    size: 14,
                     color: color.withOpacity(0.7),
                   ),
                   const SizedBox(width: 4),
@@ -387,7 +364,7 @@ class HomeScreen extends StatelessWidget {
         model.totalCost > 0 ? (model.totalProfit / model.totalCost * 100) : 0.0;
 
     // Format numbers to handle large values
-    String profitText = "\${profit.toStringAsFixed(2)}";
+    String profitText = "\$${profit.toStringAsFixed(2)}";
     String roiText = "${roi.toStringAsFixed(1)}%";
 
     return Card(
@@ -401,25 +378,11 @@ class HomeScreen extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.all(16.0),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Card Title with Icon
               Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.brown.shade100,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      Icons.analytics_outlined,
-                      color: Colors.brown.shade700,
-                      size: 24,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
                   const Text(
                     "Profit & Loss Summary",
                     style: TextStyle(
@@ -427,66 +390,79 @@ class HomeScreen extends StatelessWidget {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                ],
-              ),
-              const SizedBox(height: 24),
-
-              // Stats in a more responsive layout
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  // Total Profit
-                  _buildAnalyticsStat(
-                    label: "Total Profit",
-                    value: profitText,
-                    valueColor: profit >= 0 ? Colors.green.shade600 : Colors.red.shade600,
-                    icon: profit >= 0 ? Icons.trending_up : Icons.trending_down,
-                    iconColor: profit >= 0 ? Colors.green.shade600 : Colors.red.shade600,
-                  ),
-                  
-                  Container(
-                    height: 60,
-                    width: 1,
-                    color: Colors.grey.withOpacity(0.3),
-                  ),
-                  
-                  // ROI
-                  _buildAnalyticsStat(
-                    label: "ROI",
-                    value: roiText,
-                    valueColor: roi >= 0 ? Colors.green.shade600 : Colors.red.shade600,
-                    icon: roi >= 0 ? Icons.arrow_circle_up : Icons.arrow_circle_down,
-                    iconColor: roi >= 0 ? Colors.green.shade600 : Colors.red.shade600,
-                  ),
-                ],
-              ),
-              
-              const SizedBox(height: 16),
-              
-              // Call to action with improved visibility
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
                   Icon(
-                    Icons.touch_app, 
-                    size: 14, 
-                    color: Colors.brown.shade400,
+                    Icons.analytics,
+                    color: Colors.brown.shade300,
                   ),
-                  const SizedBox(width: 4),
-                  Text(
-                    "Tap to view detailed analytics",
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Colors.brown.shade400,
-                      fontWeight: FontWeight.w500,
+                ],
+              ),
+              const SizedBox(height: 20),
+
+              // Modified profit display with better overflow handling
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    flex: 3,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          "Total Profit",
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey,
+                          ),
+                        ),
+                        Text(
+                          profitText,
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: profit >= 0 ? Colors.green : Colors.red,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
                     ),
                   ),
-                  Icon(
-                    Icons.arrow_forward,
-                    size: 14,
-                    color: Colors.brown.shade400,
+                  Expanded(
+                    flex: 2,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        const Text(
+                          "ROI",
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey,
+                          ),
+                        ),
+                        Text(
+                          roiText,
+                          style: TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: roi >= 0 ? Colors.green : Colors.red,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
                   ),
                 ],
+              ),
+              const SizedBox(height: 20),
+              const Center(
+                child: Text(
+                  "Tap to view detailed analytics →",
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey,
+                  ),
+                ),
               ),
             ],
           ),
@@ -494,227 +470,60 @@ class HomeScreen extends StatelessWidget {
       ),
     );
   }
-  
-  // Helper method for analytics stats
-  Widget _buildAnalyticsStat({
-    required String label,
-    required String value,
-    required Color valueColor,
-    required IconData icon,
-    required Color iconColor,
-  }) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: iconColor, size: 16),
-            const SizedBox(width: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey.shade600,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 22,
-            fontWeight: FontWeight.bold,
-            color: valueColor,
-          ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-      ],
-    );
-  }
 
   Widget _buildRecentActivity(BuildContext context, PalletModel model) {
     if (model.pallets.isEmpty) {
-      return Card(
-        elevation: 3,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
+      return const Card(
         child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  Icons.inventory_2_outlined,
-                  size: 40,
-                  color: Colors.grey.shade400,
-                ),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                "No activity yet",
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                "Start by adding your first pallet!",
-                style: TextStyle(
-                  color: Colors.grey.shade600,
-                  fontSize: 14,
-                ),
-              ),
-              const SizedBox(height: 16),
-            ],
+          padding: EdgeInsets.all(16.0),
+          child: Center(
+            child: Text(
+              "No activity yet. Start by adding your first pallet!",
+              style: TextStyle(color: Colors.grey),
+            ),
           ),
         ),
       );
     }
 
     // Get 3 most recent pallets
-    final recentPallets = [...model.pallets]..sort((a, b) => b.date.compareTo(a.date));
+    final recentPallets = [...model.pallets]
+      ..sort((a, b) => b.date.compareTo(a.date));
     final displayPallets = recentPallets.take(3).toList();
 
     return Column(
       children: displayPallets.map((pallet) {
         return Card(
-          margin: const EdgeInsets.only(bottom: 10),
-          elevation: 2,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(12),
+          margin: const EdgeInsets.only(bottom: 8),
+          child: ListTile(
+            leading: CircleAvatar(
+              backgroundColor: Colors.brown.shade100,
+              child: Icon(
+                pallet.isClosed ? Icons.check_circle : Icons.inventory,
+                color: Colors.brown,
+              ),
+            ),
+            title: Text(
+              pallet.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            subtitle: Text(
+              "Tag: ${pallet.tag} • ${pallet.items.length} items (${pallet.soldItemsCount} sold)",
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            trailing: Text(
+              "\$${pallet.profit.toStringAsFixed(2)}",
+              style: TextStyle(
+                color: pallet.profit >= 0 ? Colors.green : Colors.red,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(
                 builder: (context) => PalletDetailScreen(pallet: pallet),
-              ),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-              child: Row(
-                children: [
-                  // Enhanced avatar with status indicator
-                  Stack(
-                    children: [
-                      Container(
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          color: Colors.brown.shade100,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Center(
-                          child: Icon(
-                            Icons.inventory_2,
-                            color: Colors.brown.shade700,
-                            size: 24,
-                          ),
-                        ),
-                      ),
-                      if (pallet.isClosed)
-                        Positioned(
-                          right: 0,
-                          bottom: 0,
-                          child: Container(
-                            padding: const EdgeInsets.all(2),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              shape: BoxShape.circle,
-                              border: Border.all(color: Colors.white, width: 2),
-                            ),
-                            child: const Icon(
-                              Icons.check_circle,
-                              color: Colors.green,
-                              size: 16,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(width: 16),
-                  // Content with improved spacing
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          pallet.name,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: Colors.grey.shade200,
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Text(
-                                pallet.tag,
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: Colors.grey.shade700,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Flexible(
-                              child: Text(
-                                "${pallet.items.length} items (${pallet.soldItemsCount} sold)",
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey.shade600,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  // Price with bubble background
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: pallet.profit >= 0 
-                          ? Colors.green.shade50 
-                          : Colors.red.shade50,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      "\${pallet.profit.toStringAsFixed(2)}",
-                      style: TextStyle(
-                        color: pallet.profit >= 0 ? Colors.green.shade700 : Colors.red.shade700,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ),
-                ],
               ),
             ),
           ),
@@ -898,5 +707,3 @@ class HomeScreen extends StatelessWidget {
     );
   }
 }
-
-//git change
