@@ -364,6 +364,10 @@ class PalletModel extends ChangeNotifier {
 
   int generatePalletId() => _palletIdCounter++;
 
+  int getNextPalletId() {
+    return _palletIdCounter; // Returns without incrementing
+  }
+
   void addPallet(Pallet pallet) {
     _pallets.add(pallet);
     
@@ -484,5 +488,5 @@ class PalletModel extends ChangeNotifier {
   
   // Get total count of sold items across all pallets (respects tag filter)
   int get totalSoldItems => pallets.fold(0, (sum, pallet) => sum + pallet.soldItemsCount);
-}
 
+}

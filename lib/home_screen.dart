@@ -1,4 +1,4 @@
-// File: lib/home_screen.dart
+// File: lib/home_screen.dart - Refactored for responsiveness - PART 1
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 // Import with prefix to avoid ambiguity
@@ -6,28 +6,33 @@ import 'inventory_screen.dart' as inventory;
 import 'analytics_screen.dart';
 import 'pallet_model.dart';
 import 'pallet_detail_screen.dart';
+import 'responsive_utils.dart'; // Import the new responsive utilities
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
+    // Check if we should use tablet layout
+    final isTablet = ResponsiveUtils.isTablet(context);
+    
     return Scaffold(
       body: SafeArea(
+        // For ensuring content is visible when keyboard appears
+        bottom: false,
         child: Consumer<PalletModel>(
           builder: (context, palletModel, child) {
             return CustomScrollView(
               slivers: [
-                // App Bar
+                // App Bar with responsive dimensions
                 SliverAppBar(
-                  expandedHeight: 200.0,
+                  expandedHeight: isTablet ? 250.0 : 200.0,
                   floating: false,
                   pinned: true,
                   flexibleSpace: FlexibleSpaceBar(
-                    title: const Text(
+                    title: Text(
                       "Pallet Pro",
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
+                      style: context.largeTextWeight(FontWeight.bold).copyWith(
                         color: Colors.white,
                       ),
                     ),
@@ -49,7 +54,7 @@ class HomeScreen extends StatelessWidget {
                             top: -20,
                             child: Icon(
                               Icons.inventory_2,
-                              size: 180,
+                              size: isTablet ? 250 : 180,
                               color: Colors.white.withOpacity(0.1),
                             ),
                           ),
@@ -67,19 +72,19 @@ class HomeScreen extends StatelessWidget {
                 // Quick Actions
                 SliverToBoxAdapter(
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16.0, vertical: 8.0),
+                    padding: ResponsiveUtils.getPaddingHV(
+                      context,
+                      PaddingType.medium,
+                      PaddingType.small
+                    ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
+                        Text(
                           "Quick Actions",
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
+                          style: context.largeTextWeight(FontWeight.bold),
                         ),
-                        const SizedBox(height: 10),
+                        SizedBox(height: ResponsiveUtils.getPadding(context, PaddingType.small).top),
                         // Restructured to ensure equal height and proper scaling for medium font sizes
                         _buildQuickActionCards(context),
                       ],
@@ -90,18 +95,15 @@ class HomeScreen extends StatelessWidget {
                 // Analytics Section
                 SliverToBoxAdapter(
                   child: Padding(
-                    padding: const EdgeInsets.all(16.0),
+                    padding: ResponsiveUtils.getPadding(context, PaddingType.medium),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
+                        Text(
                           "Business Insights",
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
+                          style: context.largeTextWeight(FontWeight.bold),
                         ),
-                        const SizedBox(height: 16),
+                        SizedBox(height: ResponsiveUtils.getPadding(context, PaddingType.medium).top),
                         _buildAnalyticsCard(
                           context,
                           palletModel,
@@ -116,25 +118,30 @@ class HomeScreen extends StatelessWidget {
                   ),
                 ),
 
-                // Recent Activity
+                // Recent Activity with responsive layout considerations
                 SliverToBoxAdapter(
                   child: Padding(
-                    padding: const EdgeInsets.all(16.0),
+                    padding: ResponsiveUtils.getPadding(context, PaddingType.medium),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
+                        Text(
                           "Recent Activity",
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
+                          style: context.largeTextWeight(FontWeight.bold),
                         ),
-                        const SizedBox(height: 16),
-                        _buildRecentActivity(context, palletModel),
+                        SizedBox(height: ResponsiveUtils.getPadding(context, PaddingType.medium).top),
+                        // Grid view for tablets, list view for phones
+                        isTablet
+                            ? _buildRecentActivityGrid(context, palletModel)
+                            : _buildRecentActivity(context, palletModel),
                       ],
                     ),
                   ),
+                ),
+                
+                // Add bottom padding to ensure content is not hidden by navigation elements
+                SliverToBoxAdapter(
+                  child: SizedBox(height: MediaQuery.of(context).padding.bottom + 16),
                 ),
               ],
             );
@@ -149,9 +156,13 @@ class HomeScreen extends StatelessWidget {
     final totalPallets = model.pallets.length;
     final itemsSold = model.totalSoldItems;
 
+    // Check if we should use tablet layout for more space
+    final isTablet = ResponsiveUtils.isTablet(context);
+
     return Container(
-      padding: const EdgeInsets.all(16),
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      padding: ResponsiveUtils.getPadding(context, PaddingType.medium),
+      margin: ResponsiveUtils.getPaddingHV(
+          context, PaddingType.medium, PaddingType.medium),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -168,26 +179,29 @@ class HomeScreen extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
           _buildStatItem(
+            context: context,
             label: "Total Profit",
             value: "\$${profit.toStringAsFixed(2)}",
             color: profit >= 0 ? Colors.green : Colors.red,
             icon: Icons.trending_up,
           ),
-          const SizedBox(
-            height: 40,
+          SizedBox(
+            height: isTablet ? 50 : 40,
             child: VerticalDivider(thickness: 1),
           ),
           _buildStatItem(
+            context: context,
             label: "Pallets",
             value: totalPallets.toString(),
             color: Colors.blue,
             icon: Icons.inventory_2,
           ),
-          const SizedBox(
-            height: 40,
+          SizedBox(
+            height: isTablet ? 50 : 40,
             child: VerticalDivider(thickness: 1),
           ),
           _buildStatItem(
+            context: context,
             label: "Items Sold",
             value: itemsSold.toString(),
             color: Colors.orange,
@@ -199,37 +213,83 @@ class HomeScreen extends StatelessWidget {
   }
 
   Widget _buildStatItem({
-    required String label,
-    required String value,
-    required Color color,
-    required IconData icon,
-  }) {
-    return Column(
-      children: [
-        Icon(icon, color: color, size: 24),
-        const SizedBox(height: 4),
-        Text(
+  required BuildContext context,
+  required String label,
+  required String value,
+  required Color color,
+  required IconData icon,
+}) {
+  // Adjust font size based on text length to prevent overflow
+  final valueLength = value.length;
+  final fontSize = valueLength > 8
+      ? FontSizeType.small
+      : (valueLength > 5 ? FontSizeType.medium : FontSizeType.large);
+  
+  return Column(
+    children: [
+      Icon(
+        icon, 
+        color: color, 
+        size: ResponsiveUtils.getIconSize(context, IconSizeType.medium)
+      ),
+      SizedBox(height: ResponsiveUtils.getPadding(context, PaddingType.tiny).top),
+      FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Text(
           value,
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-            color: color,
-          ),
+          style: fontSize == FontSizeType.small
+              ? context.smallTextWeight(FontWeight.bold).copyWith(color: color)
+              : (fontSize == FontSizeType.medium
+                  ? context.mediumTextWeight(FontWeight.bold).copyWith(color: color)
+                  : context.largeTextWeight(FontWeight.bold).copyWith(color: color)),
         ),
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 12,
-            color: Colors.grey,
-          ),
-        ),
-      ],
-    );
-  }
+      ),
+      Text(
+        label,
+        style: context.smallTextColor(Colors.grey),
+      ),
+    ],
+  );
+}
 
   // Enhanced method for building quick action cards with better visual cues
   Widget _buildQuickActionCards(BuildContext context) {
     return LayoutBuilder(builder: (context, constraints) {
+      final isVeryNarrow = constraints.maxWidth < 300;
+      
+      // For very narrow screens, stack cards vertically
+      if (isVeryNarrow) {
+        return Column(
+          children: [
+            _buildActionCard(
+              context,
+              icon: Icons.inventory_2_outlined,
+              title: "Manage Inventory",
+              subtitle: "Browse and track items",
+              color: Colors.blue.shade600,
+              maxWidth: constraints.maxWidth,
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const inventory.InventoryScreen(),
+                ),
+              ),
+            ),
+            SizedBox(height: ResponsiveUtils.getPadding(context, PaddingType.small).top),
+            _buildActionCard(
+              context,
+              icon: Icons.add_box_rounded,
+              title: "Add Pallet",
+              subtitle: "Create new inventory",
+              color: Colors.green.shade600,
+              maxWidth: constraints.maxWidth,
+              onTap: () => showAddPalletDialog(context),
+            ),
+          ],
+        );
+      }
+      
+      // For other screens, use a row layout
       return Row(
         children: [
           Expanded(
@@ -248,7 +308,7 @@ class HomeScreen extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(width: 12),
+          SizedBox(width: ResponsiveUtils.getPadding(context, PaddingType.small).left),
           Expanded(
             child: _buildActionCard(
               context,
@@ -275,6 +335,12 @@ class HomeScreen extends StatelessWidget {
     required double maxWidth,
   }) {
     // Enhanced card design with clearer visual hierarchy and better action indication
+    // Get font scale to adjust padding
+    final fontScale = MediaQuery.of(context).textScaleFactor;
+    final padding = fontScale > 1.3 
+        ? ResponsiveUtils.getPadding(context, PaddingType.small) 
+        : ResponsiveUtils.getPadding(context, PaddingType.medium);
+
     return Card(
       elevation: 3,
       shape: RoundedRectangleBorder(
@@ -284,15 +350,15 @@ class HomeScreen extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(16),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: padding,
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               // Larger, more visible icon with background
               Container(
-                width: 52,
-                height: 52,
+                width: ResponsiveUtils.getIconSize(context, IconSizeType.xLarge),
+                height: ResponsiveUtils.getIconSize(context, IconSizeType.xLarge),
                 decoration: BoxDecoration(
                   color: color.withOpacity(0.15),
                   shape: BoxShape.circle,
@@ -301,49 +367,42 @@ class HomeScreen extends StatelessWidget {
                   child: Icon(
                     icon,
                     color: color,
-                    size: 28,
+                    size: ResponsiveUtils.getIconSize(context, IconSizeType.medium),
                   ),
                 ),
               ),
-              const SizedBox(height: 12),
+              SizedBox(height: ResponsiveUtils.getPadding(context, PaddingType.small).top),
               // Centered, prominent title
               Text(
                 title,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 15,
-                ),
+                style: context.mediumTextWeight(FontWeight.bold),
                 textAlign: TextAlign.center,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
-              const SizedBox(height: 4),
+              SizedBox(height: ResponsiveUtils.getPadding(context, PaddingType.tiny).top),
               // Subtitle with better contrast
               Text(
                 subtitle,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey.shade600,
-                ),
+                style: context.smallTextColor(Colors.grey.shade600),
                 textAlign: TextAlign.center,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
-              const SizedBox(height: 8),
+              SizedBox(height: ResponsiveUtils.getPadding(context, PaddingType.small).top),
               // Visual indicator that this is an action
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
                     Icons.touch_app,
-                    size: 14,
+                    size: ResponsiveUtils.getIconSize(context, IconSizeType.tiny),
                     color: color.withOpacity(0.7),
                   ),
-                  const SizedBox(width: 4),
+                  SizedBox(width: ResponsiveUtils.getPadding(context, PaddingType.tiny).left),
                   Text(
                     "Tap to access",
-                    style: TextStyle(
-                      fontSize: 11,
+                    style: context.tinyText.copyWith(
                       color: color.withOpacity(0.7),
                       fontWeight: FontWeight.w500,
                     ),
@@ -376,27 +435,25 @@ class HomeScreen extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(16),
         child: Padding(
-          padding: const EdgeInsets.all(16.0),
+          padding: ResponsiveUtils.getPadding(context, PaddingType.medium),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
+                  Text(
                     "Profit & Loss Summary",
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: context.mediumTextWeight(FontWeight.bold),
                   ),
                   Icon(
                     Icons.analytics,
                     color: Colors.brown.shade300,
+                    size: ResponsiveUtils.getIconSize(context, IconSizeType.medium),
                   ),
                 ],
               ),
-              const SizedBox(height: 20),
+              SizedBox(height: ResponsiveUtils.getPadding(context, PaddingType.medium).top),
 
               // Modified profit display with better overflow handling
               Row(
@@ -407,22 +464,20 @@ class HomeScreen extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          "Total Profit",
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey,
-                          ),
-                        ),
                         Text(
-                          profitText,
-                          style: TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                            color: profit >= 0 ? Colors.green : Colors.red,
+                          "Total Profit",
+                          style: context.smallTextColor(Colors.grey),
+                        ),
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            profitText,
+                            style: context.xLargeTextWeight(FontWeight.bold).copyWith(
+                              color: profit >= 0 ? Colors.green : Colors.red,
+                            ),
+                            maxLines: 1,
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
                         ),
                       ],
                     ),
@@ -432,18 +487,13 @@ class HomeScreen extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        const Text(
+                        Text(
                           "ROI",
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey,
-                          ),
+                          style: context.smallTextColor(Colors.grey),
                         ),
                         Text(
                           roiText,
-                          style: TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
+                          style: context.xLargeTextWeight(FontWeight.bold).copyWith(
                             color: roi >= 0 ? Colors.green : Colors.red,
                           ),
                           maxLines: 1,
@@ -454,14 +504,11 @@ class HomeScreen extends StatelessWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 20),
-              const Center(
+              SizedBox(height: ResponsiveUtils.getPadding(context, PaddingType.medium).top),
+              Center(
                 child: Text(
                   "Tap to view detailed analytics →",
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey,
-                  ),
+                  style: context.smallTextColor(Colors.grey),
                 ),
               ),
             ],
@@ -473,13 +520,14 @@ class HomeScreen extends StatelessWidget {
 
   Widget _buildRecentActivity(BuildContext context, PalletModel model) {
     if (model.pallets.isEmpty) {
-      return const Card(
+      return Card(
         child: Padding(
-          padding: EdgeInsets.all(16.0),
+          padding: ResponsiveUtils.getPadding(context, PaddingType.medium),
           child: Center(
             child: Text(
               "No activity yet. Start by adding your first pallet!",
-              style: TextStyle(color: Colors.grey),
+              style: context.mediumTextColor(Colors.grey),
+              textAlign: TextAlign.center,
             ),
           ),
         ),
@@ -494,30 +542,33 @@ class HomeScreen extends StatelessWidget {
     return Column(
       children: displayPallets.map((pallet) {
         return Card(
-          margin: const EdgeInsets.only(bottom: 8),
+          margin: EdgeInsets.only(bottom: ResponsiveUtils.getPadding(context, PaddingType.small).bottom),
           child: ListTile(
+            contentPadding: ResponsiveUtils.getPadding(context, PaddingType.small),
             leading: CircleAvatar(
               backgroundColor: Colors.brown.shade100,
               child: Icon(
                 pallet.isClosed ? Icons.check_circle : Icons.inventory,
                 color: Colors.brown,
+                size: ResponsiveUtils.getIconSize(context, IconSizeType.small),
               ),
             ),
             title: Text(
               pallet.name,
+              style: context.mediumText,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
             subtitle: Text(
               "Tag: ${pallet.tag} • ${pallet.items.length} items (${pallet.soldItemsCount} sold)",
+              style: context.smallText,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
             trailing: Text(
               "\$${pallet.profit.toStringAsFixed(2)}",
-              style: TextStyle(
+              style: context.mediumTextWeight(FontWeight.bold).copyWith(
                 color: pallet.profit >= 0 ? Colors.green : Colors.red,
-                fontWeight: FontWeight.bold,
               ),
             ),
             onTap: () => Navigator.push(
@@ -531,12 +582,108 @@ class HomeScreen extends StatelessWidget {
       }).toList(),
     );
   }
+  
+  // New method for tablet grid layout of recent activity
+  Widget _buildRecentActivityGrid(BuildContext context, PalletModel model) {
+    if (model.pallets.isEmpty) {
+      return Card(
+        child: Padding(
+          padding: ResponsiveUtils.getPadding(context, PaddingType.medium),
+          child: Center(
+            child: Text(
+              "No activity yet. Start by adding your first pallet!",
+              style: context.mediumTextColor(Colors.grey),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Get 6 most recent pallets for tablets (more space)
+    final recentPallets = [...model.pallets]
+      ..sort((a, b) => b.date.compareTo(a.date));
+    final displayPallets = recentPallets.take(6).toList();
+    
+    // Create a grid with 2 items per row
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        childAspectRatio: 3,
+        crossAxisSpacing: ResponsiveUtils.getPadding(context, PaddingType.small).right,
+        mainAxisSpacing: ResponsiveUtils.getPadding(context, PaddingType.small).bottom,
+      ),
+      itemCount: displayPallets.length,
+      itemBuilder: (context, index) {
+        final pallet = displayPallets[index];
+        return Card(
+          child: InkWell(
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => PalletDetailScreen(pallet: pallet),
+              ),
+            ),
+            child: Padding(
+              padding: ResponsiveUtils.getPadding(context, PaddingType.small),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Row(
+                    children: [
+                      CircleAvatar(
+                        backgroundColor: Colors.brown.shade100,
+                        radius: 16,
+                        child: Icon(
+                          pallet.isClosed ? Icons.check_circle : Icons.inventory,
+                          color: Colors.brown,
+                          size: ResponsiveUtils.getIconSize(context, IconSizeType.small),
+                        ),
+                      ),
+                      SizedBox(width: ResponsiveUtils.getPadding(context, PaddingType.small).left),
+                      Expanded(
+                        child: Text(
+                          pallet.name,
+                          style: context.mediumTextWeight(FontWeight.bold),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      Text(
+                        "\$${pallet.profit.toStringAsFixed(2)}",
+                        style: context.mediumTextWeight(FontWeight.bold).copyWith(
+                          color: pallet.profit >= 0 ? Colors.green : Colors.red,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Padding(
+                    padding: EdgeInsets.only(left: ResponsiveUtils.getPadding(context, PaddingType.medium).left),
+                    child: Text(
+                      "Tag: ${pallet.tag} • ${pallet.items.length} items (${pallet.soldItemsCount} sold)",
+                      style: context.smallText,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
 
   void showAddPalletDialog(BuildContext context) {
     final palletModel = Provider.of<PalletModel>(context, listen: false);
-    // Set default name "Pallet X" based on the next ID
-    final nameController =
-        TextEditingController(text: "Pallet ${palletModel.generatePalletId()}");
+
+    final int nextId =
+        palletModel.getNextPalletId(); // Get ID without incrementing
+    final nameController = TextEditingController(text: "Pallet $nextId");
     final tagController = TextEditingController();
     final costController = TextEditingController();
     final formKey = GlobalKey<FormState>();
@@ -549,49 +696,62 @@ class HomeScreen extends StatelessWidget {
         shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
         ),
-        builder: (context) => Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                "Select a Tag",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 16),
-              Container(
-                constraints: BoxConstraints(
-                  maxHeight: MediaQuery.of(context).size.height * 0.3,
+        builder: (context) {
+          // Directly access the model inside the builder for freshest data
+          final tagsToShow =
+              Provider.of<PalletModel>(context).savedTags.toList();
+
+          return Container(
+            padding: EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "Select a Tag",
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
-                child: SingleChildScrollView(
-                  child: Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: palletModel.savedTags
-                        .map((tag) => ActionChip(
-                              label: Text(tag),
-                              avatar: const Icon(Icons.sell_outlined, size: 16),
-                              onPressed: () {
-                                tagController.text = tag;
+                SizedBox(height: 16),
+
+                // Show tags or a message if empty
+                tagsToShow.isEmpty
+                    ? Padding(
+                        padding: EdgeInsets.symmetric(vertical: 20),
+                        child: Text("No tags available"),
+                      )
+                    : Container(
+                        height: 200, // Fixed height container
+                        child: ListView.builder(
+                          itemCount: tagsToShow.length,
+                          itemBuilder: (context, index) {
+                            return ListTile(
+                              leading: Icon(Icons.label),
+                              title: Text(tagsToShow[index]),
+                              onTap: () {
+                                tagController.text = tagsToShow[index];
                                 Navigator.pop(context);
                               },
-                            ))
-                        .toList(),
+                            );
+                          },
+                        ),
+                      ),
+
+                SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF02838A),
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    onPressed: () => Navigator.pop(context),
+                    child: Text("CLOSE", style: TextStyle(color: Colors.white)),
                   ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text("CLOSE"),
-                ),
-              ),
-            ],
-          ),
-        ),
+              ],
+            ),
+          );
+        },
       );
     }
 
@@ -616,91 +776,133 @@ class HomeScreen extends StatelessWidget {
       }
     }
 
-    // Show a regular dialog with simplified content
+    // Show a dialog with keyboard awareness to handle different screen sizes and keyboard appearance
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Add New Pallet"),
-        content: SingleChildScrollView(
-          child: Form(
-            key: formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextFormField(
-                  controller: nameController,
-                  decoration: const InputDecoration(
-                    labelText: "Pallet Name",
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.inventory_2_outlined),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return "Enter pallet name";
-                    }
-                    // Check for duplicate names
-                    if (palletModel.palletNameExists(value)) {
-                      return "A pallet with this name already exists";
-                    }
-                    return null;
-                  },
-                  autofocus: true,
-                  textInputAction: TextInputAction.next,
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextFormField(
-                        controller: tagController,
-                        decoration: const InputDecoration(
-                          labelText: "Tag",
-                          border: OutlineInputBorder(),
-                          prefixIcon: Icon(Icons.sell_outlined),
-                        ),
-                        readOnly: false, // Allow direct editing too
+        title: Text("Add New Pallet",
+            style: context.largeTextWeight(FontWeight.bold)),
+        content: KeyboardAware(
+          child: SingleChildScrollView(
+            child: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextFormField(
+                    controller: nameController,
+                    decoration: InputDecoration(
+                      labelText: "Pallet Name",
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(
+                        Icons.inventory_2_outlined,
+                        size: ResponsiveUtils.getIconSize(
+                            context, IconSizeType.medium),
                       ),
+                      contentPadding: ResponsiveUtils.getPaddingHV(
+                          context, PaddingType.small, PaddingType.small),
                     ),
-                    if (palletModel.savedTags.isNotEmpty)
-                      IconButton(
-                        icon: const Icon(Icons.list),
-                        tooltip: "Select saved tag",
-                        onPressed: showTagSelector,
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: costController,
-                  decoration: const InputDecoration(
-                    labelText: "Total Cost",
-                    prefixIcon: Icon(Icons.attach_money),
-                    border: OutlineInputBorder(),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return "Enter pallet name";
+                      }
+                      // Check for duplicate names
+                      if (palletModel.palletNameExists(value)) {
+                        return "A pallet with this name already exists";
+                      }
+                      return null;
+                    },
+                    autofocus: true,
+                    textInputAction: TextInputAction.next,
+                    style: context.mediumText,
                   ),
-                  keyboardType: TextInputType.number,
-                  validator: (value) {
-                    if (value!.isEmpty) {
-                      return "Enter cost";
-                    }
-                    if (double.tryParse(value) == null) {
-                      return "Enter a valid number";
-                    }
-                    return null;
-                  },
-                  onEditingComplete: submitForm, // Submit on keyboard done
-                ),
-              ],
+                  SizedBox(
+                      height: ResponsiveUtils.getPadding(
+                              context, PaddingType.medium)
+                          .top),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          controller: tagController,
+                          decoration: InputDecoration(
+                            labelText: "Tag",
+                            border: OutlineInputBorder(),
+                            prefixIcon: Icon(
+                              Icons.sell_outlined,
+                              size: ResponsiveUtils.getIconSize(
+                                  context, IconSizeType.medium),
+                            ),
+                            contentPadding: ResponsiveUtils.getPaddingHV(
+                                context, PaddingType.small, PaddingType.small),
+                          ),
+                          readOnly: false, // Allow direct editing too
+                          style: context.mediumText,
+                        ),
+                      ),
+                      if (palletModel.savedTags.isNotEmpty)
+                        IconButton(
+                          icon: Icon(
+                            Icons.list,
+                            size: ResponsiveUtils.getIconSize(
+                                context, IconSizeType.medium),
+                          ),
+                          tooltip: "Select saved tag",
+                          onPressed: showTagSelector,
+                        ),
+                    ],
+                  ),
+                  SizedBox(
+                      height: ResponsiveUtils.getPadding(
+                              context, PaddingType.medium)
+                          .top),
+                  TextFormField(
+                    controller: costController,
+                    decoration: InputDecoration(
+                      labelText: "Total Cost",
+                      prefixIcon: Icon(
+                        Icons.attach_money,
+                        size: ResponsiveUtils.getIconSize(
+                            context, IconSizeType.medium),
+                      ),
+                      border: OutlineInputBorder(),
+                      contentPadding: ResponsiveUtils.getPaddingHV(
+                          context, PaddingType.small, PaddingType.small),
+                    ),
+                    keyboardType: TextInputType.number,
+                    validator: (value) {
+                      if (value!.isEmpty) {
+                        return "Enter cost";
+                      }
+                      if (double.tryParse(value) == null) {
+                        return "Enter a valid number";
+                      }
+                      return null;
+                    },
+                    onEditingComplete: submitForm, // Submit on keyboard done
+                    style: context.mediumText,
+                  ),
+                ],
+              ),
             ),
           ),
         ),
+        // Use fixed row layout for the actions instead of LayoutBuilder
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text("CANCEL"),
+            child: Text("CANCEL", style: context.mediumText),
+            style: TextButton.styleFrom(
+              minimumSize: Size(60, 36),
+            ),
           ),
+          SizedBox(width: 8),
           ElevatedButton(
             onPressed: submitForm,
-            child: const Text("ADD"),
+            child: Text("ADD", style: context.mediumText),
+            style: ElevatedButton.styleFrom(
+              minimumSize: Size(60, 36),
+            ),
           ),
         ],
       ),
