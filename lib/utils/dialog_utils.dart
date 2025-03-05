@@ -249,67 +249,70 @@ class DialogUtils {
   /// Shows a tag filter dialog
   /// Used in both InventoryScreen and AnalyticsScreen
   static void showTagFilterDialog(BuildContext context) {
-    // Get a reference to the model
-    final palletModel = Provider.of<PalletModel>(context, listen: false);
-
-    // Get a direct copy of the tags
-    final List<String> tagsList = palletModel.savedTags.toList();
-
     showDialog(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text("Filter by Tag",
-              style: TextStyle(fontWeight: FontWeight.bold)),
-          content: Container(
-            width: double.maxFinite,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // All option
-                ListTile(
-                  leading: Icon(Icons.all_inclusive, color: Colors.orange),
-                  title: Text("All",
-                      style: TextStyle(fontWeight: FontWeight.bold)),
-                  selected: palletModel.currentTagFilter == null,
-                  tileColor: palletModel.currentTagFilter == null
-                      ? Colors.orange.withOpacity(0.2)
-                      : null,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8)),
-                  onTap: () {
-                    palletModel.setTagFilter(null);
-                    Navigator.pop(context);
-                  },
-                ),
+      builder: (dialogContext) {
+        // This causes the dialog to rebuild whenever the model changes
+        return Consumer<PalletModel>(
+          builder: (context, palletModel, child) {
+            // Get a direct copy of the tags within the Consumer builder
+            final List<String> tagsList = palletModel.savedTags.toList();
 
-                // Build tag list items dynamically from saved tags
-                ...tagsList
-                    .map((tag) => ListTile(
-                          leading: Icon(Icons.label, color: Colors.teal),
-                          title: Text(tag,
-                              style: TextStyle(fontWeight: FontWeight.bold)),
-                          selected: palletModel.currentTagFilter == tag,
-                          tileColor: palletModel.currentTagFilter == tag
-                              ? Colors.teal.withOpacity(0.2)
-                              : null,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8)),
-                          onTap: () {
-                            palletModel.setTagFilter(tag);
-                            Navigator.pop(context);
-                          },
-                        ))
-                    .toList(),
+            return AlertDialog(
+              title: Text("Filter by Tag",
+                  style: TextStyle(fontWeight: FontWeight.bold)),
+              content: Container(
+                width: double.maxFinite,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // All option
+                    ListTile(
+                      leading: Icon(Icons.all_inclusive, color: Colors.orange),
+                      title: Text("All",
+                          style: TextStyle(fontWeight: FontWeight.bold)),
+                      selected: palletModel.currentTagFilter == null,
+                      tileColor: palletModel.currentTagFilter == null
+                          ? Colors.orange.withOpacity(0.2)
+                          : null,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                      onTap: () {
+                        palletModel.setTagFilter(null);
+                        Navigator.pop(context);
+                      },
+                    ),
+
+                    // Build tag list items dynamically from saved tags
+                    ...tagsList
+                        .map((tag) => ListTile(
+                              leading: Icon(Icons.label, color: Colors.teal),
+                              title: Text(tag,
+                                  style:
+                                      TextStyle(fontWeight: FontWeight.bold)),
+                              selected: palletModel.currentTagFilter == tag,
+                              tileColor: palletModel.currentTagFilter == tag
+                                  ? Colors.teal.withOpacity(0.2)
+                                  : null,
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8)),
+                              onTap: () {
+                                palletModel.setTagFilter(tag);
+                                Navigator.pop(context);
+                              },
+                            ))
+                        .toList(),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text("CLOSE", style: TextStyle(color: Colors.teal)),
+                ),
               ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text("CLOSE", style: TextStyle(color: Colors.teal)),
-            ),
-          ],
+            );
+          },
         );
       },
     );

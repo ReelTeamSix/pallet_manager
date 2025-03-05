@@ -38,6 +38,7 @@ class _PalletDetailScreenState extends State<PalletDetailScreen> {
         );
 
         return Scaffold(
+          key: UniqueKey(),
           appBar: AppBar(
             title: Row(
               mainAxisSize: MainAxisSize.min,
