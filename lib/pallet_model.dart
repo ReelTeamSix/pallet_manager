@@ -381,6 +381,12 @@ class PalletModel extends ChangeNotifier {
   }
 
   void removePallet(int palletId) {
+    int highestId = _pallets.fold(0, (max, pallet) => pallet.id > max ? pallet.id : max);
+
+    if (palletId == highestId && _palletIdCounter > 1) {
+      _palletIdCounter --;
+    }
+
     _pallets.removeWhere((p) => p.id == palletId);
     notifyListeners();
     saveData();
@@ -488,5 +494,53 @@ class PalletModel extends ChangeNotifier {
   
   // Get total count of sold items across all pallets (respects tag filter)
   int get totalSoldItems => pallets.fold(0, (sum, pallet) => sum + pallet.soldItemsCount);
+
+  Future<void> forceDataReload() async {
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+
+      // First, clear all data to ensure a clean slate
+      _pallets = [];
+      _savedTags = {};
+      notifyListeners(); // Notify listeners of the cleared state
+
+      // Small delay to ensure UI reflects the cleared state
+      await Future.delayed(const Duration(milliseconds: 50));
+
+      // Now reload from storage
+      final prefs = await SharedPreferences.getInstance();
+      final palletsString = prefs.getString('pallets');
+      final savedTagsList = prefs.getStringList('savedTags');
+
+      if (palletsString != null) {
+        try {
+          final decodedList = jsonDecode(palletsString) as List<dynamic>;
+          _pallets = decodedList.map((e) => Pallet.fromJson(e)).toList();
+          _palletIdCounter = prefs.getInt('palletIdCounter') ?? 1;
+          _itemIdCounter = prefs.getInt('itemIdCounter') ?? 1;
+        } catch (e) {
+          debugPrint('Error parsing pallets data: $e');
+        }
+      }
+
+      if (savedTagsList != null) {
+        _savedTags = savedTagsList.toSet();
+      }
+
+      // Collect all tags from existing pallets
+      for (var pallet in _pallets) {
+        if (pallet.tag.isNotEmpty) {
+          _savedTags.add(pallet.tag);
+        }
+      }
+    } catch (e) {
+      debugPrint('Error reloading data: $e');
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
 
 }

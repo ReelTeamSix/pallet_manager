@@ -4,6 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'pallet_model.dart';
 import 'responsive_utils.dart'; // Import the new responsive utilities
+import 'dart:math' show min;
+import 'utils/dialog_utils.dart'; // Import the dialog utils for tag filter dialog
+
 
 class AnalyticsScreen extends StatelessWidget {
   const AnalyticsScreen({super.key});
@@ -306,27 +309,25 @@ class AnalyticsScreen extends StatelessWidget {
                                   thickness: 1,
                                   color: Color(0xFFEEEEEE)),
                               
-                              ConstrainedBox(
-                                constraints: BoxConstraints(
-                                  minHeight: ResponsiveUtils.getResponsiveCardHeight(
-                                    context, 
-                                    baseHeight: 400, 
-                                    isExpanded: false
-                                  ),
-                                  maxHeight: constraints.maxHeight * 0.65,
-                                ),
+                              SizedBox(
+                                height: min(
+                                    ResponsiveUtils.getResponsiveCardHeight(
+                                        context,
+                                        baseHeight: 350,
+                                        isExpanded: false),
+                                    constraints.maxHeight * 0.65),
                                 child: TabBarView(
                                   children: [
                                     _buildYearToDatePanel(context, palletModel),
                                     _buildAllTimePanel(
-                                      context,
-                                      totalRevenue,
-                                      totalCost,
-                                      totalProfit,
-                                      totalPallets,
-                                      totalItemsSold
-                                    ),
-                                    _buildTagAnalysisPanel(context, palletModel),
+                                        context,
+                                        totalRevenue,
+                                        totalCost,
+                                        totalProfit,
+                                        totalPallets,
+                                        totalItemsSold),
+                                    _buildTagAnalysisPanel(
+                                        context, palletModel),
                                   ],
                                 ),
                               ),
@@ -505,90 +506,7 @@ class AnalyticsScreen extends StatelessWidget {
   }
 
   void _showTagFilterDialog(BuildContext context) {
-    // Get a reference to the model
-    final palletModel = Provider.of<PalletModel>(context, listen: false);
-
-    // Get a direct copy of the tags
-    final List<String> tagsList = palletModel.savedTags.toList();
-    final String currentFilter = palletModel.currentTagFilter ?? "";
-
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text("Filter by Tag",
-              style: TextStyle(fontWeight: FontWeight.bold)),
-          content: Container(
-            width: double.maxFinite,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // All option with hardcoded display
-                ListTile(
-                  leading: Icon(Icons.all_inclusive, color: Colors.orange),
-                  title: Text("All",
-                      style: TextStyle(fontWeight: FontWeight.bold)),
-                  selected: palletModel.currentTagFilter == null,
-                  tileColor: palletModel.currentTagFilter == null
-                      ? Colors.orange.withOpacity(0.2)
-                      : null,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8)),
-                  onTap: () {
-                    palletModel.setTagFilter(null);
-                    Navigator.pop(context);
-                  },
-                ),
-
-                // Hard-coded tag for Amazon Monster (since that's what's visible in your UI)
-                ListTile(
-                  leading: Icon(Icons.label, color: Colors.teal),
-                  title: Text("Amazon Monster",
-                      style: TextStyle(fontWeight: FontWeight.bold)),
-                  selected: palletModel.currentTagFilter == "Amazon Monster",
-                  tileColor: palletModel.currentTagFilter == "Amazon Monster"
-                      ? Colors.teal.withOpacity(0.2)
-                      : null,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8)),
-                  onTap: () {
-                    palletModel.setTagFilter("Amazon Monster");
-                    Navigator.pop(context);
-                  },
-                ),
-
-                // Any additional tags (though this might not be needed if we just have the one tag)
-                ...tagsList
-                    .where((tag) =>
-                        tag != "Amazon Monster") // Skip the one we hardcoded
-                    .map((tag) => ListTile(
-                          leading: Icon(Icons.label, color: Colors.teal),
-                          title: Text(tag,
-                              style: TextStyle(fontWeight: FontWeight.bold)),
-                          selected: palletModel.currentTagFilter == tag,
-                          tileColor: palletModel.currentTagFilter == tag
-                              ? Colors.teal.withOpacity(0.2)
-                              : null,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8)),
-                          onTap: () {
-                            palletModel.setTagFilter(tag);
-                            Navigator.pop(context);
-                          },
-                        ))
-                    .toList(),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text("CLOSE", style: TextStyle(color: Colors.teal)),
-            ),
-          ],
-        );
-      },
-    );
+    DialogUtils.showTagFilterDialog(context);
   }
 
   Widget _buildYearToDatePanel(BuildContext context, PalletModel model) {

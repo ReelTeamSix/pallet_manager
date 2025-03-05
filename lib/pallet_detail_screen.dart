@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'pallet_model.dart';
 import 'responsive_utils.dart'; // Import responsive utilities
+import 'utils/dialog_utils.dart'; // Import dialog utilities
 
 class PalletDetailScreen extends StatefulWidget {
   final Pallet pallet;
@@ -22,10 +23,10 @@ class _PalletDetailScreenState extends State<PalletDetailScreen> {
     final deviceSize = ResponsiveUtils.getDeviceSize(context);
     final isTablet = ResponsiveUtils.isTablet(context);
     ResponsiveUtils.getFontScale(context);
-    
+
     // Adjust for different phone sizes
-    final isNarrowScreen = deviceSize == DeviceSize.phoneXSmall || 
-                          deviceSize == DeviceSize.phoneSmall;
+    final isNarrowScreen = deviceSize == DeviceSize.phoneXSmall ||
+        deviceSize == DeviceSize.phoneSmall;
 
     // Use Consumer to automatically rebuild when the model changes
     return Consumer<PalletModel>(
@@ -56,10 +57,9 @@ class _PalletDetailScreenState extends State<PalletDetailScreen> {
                           ),
                         ),
                         SizedBox(width: 4),
-                        Icon(
-                          Icons.edit, 
-                          size: ResponsiveUtils.getIconSize(context, IconSizeType.small)
-                        ),
+                        Icon(Icons.edit,
+                            size: ResponsiveUtils.getIconSize(
+                                context, IconSizeType.small)),
                       ],
                     ),
                   ),
@@ -75,7 +75,8 @@ class _PalletDetailScreenState extends State<PalletDetailScreen> {
                 tooltip: _isInfoCardExpanded
                     ? "Collapse pallet info"
                     : "Expand pallet info",
-                iconSize: ResponsiveUtils.getIconSize(context, IconSizeType.medium),
+                iconSize:
+                    ResponsiveUtils.getIconSize(context, IconSizeType.medium),
                 onPressed: () {
                   setState(() {
                     _isInfoCardExpanded = !_isInfoCardExpanded;
@@ -85,9 +86,10 @@ class _PalletDetailScreenState extends State<PalletDetailScreen> {
             ],
           ),
           // Use different layouts for tablet vs phone
-          body: isTablet 
+          body: isTablet
               ? _buildTabletLayout(context, palletModel, currentPallet)
-              : _buildPhoneLayout(context, palletModel, currentPallet, isNarrowScreen),
+              : _buildPhoneLayout(
+                  context, palletModel, currentPallet, isNarrowScreen),
         );
       },
     );
@@ -623,17 +625,19 @@ class _PalletDetailScreenState extends State<PalletDetailScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              Icons.inventory_2_outlined, 
-              size: ResponsiveUtils.getIconSize(context, IconSizeType.xLarge),
-              color: Colors.grey
-            ),
-            SizedBox(height: ResponsiveUtils.getPadding(context, PaddingType.medium).top),
+            Icon(Icons.inventory_2_outlined,
+                size: ResponsiveUtils.getIconSize(context, IconSizeType.xLarge),
+                color: Colors.grey),
+            SizedBox(
+                height: ResponsiveUtils.getPadding(context, PaddingType.medium)
+                    .top),
             Text(
               "No items added yet",
               style: context.mediumTextColor(Colors.grey),
             ),
-            SizedBox(height: ResponsiveUtils.getPadding(context, PaddingType.tiny).top),
+            SizedBox(
+                height:
+                    ResponsiveUtils.getPadding(context, PaddingType.tiny).top),
             Text(
               "Tap 'Add Item' to get started",
               style: context.smallTextColor(Colors.grey),
@@ -643,148 +647,162 @@ class _PalletDetailScreenState extends State<PalletDetailScreen> {
       );
     }
 
-    // Font sizes for different screen widths
-    final titleFontSize = isNarrowScreen 
-        ? FontSizeType.small
-        : FontSizeType.medium;
-    final subtitleFontSize = isNarrowScreen 
-        ? FontSizeType.tiny
-        : FontSizeType.small;
-
     return ListView.builder(
       itemCount: pallet.items.length,
       itemBuilder: (context, index) {
         final item = pallet.items[index];
+        // Key change: Use a stable key that reflects the item state
         return Dismissible(
-          key: Key('item-${item.id}'),
-          // Swipe left to delete
+          key: ValueKey('item-${item.id}-${item.isSold ? 'sold' : 'unsold'}'),
           background: Container(
             color: Colors.red,
             alignment: Alignment.centerLeft,
             padding: EdgeInsets.symmetric(
-              horizontal: ResponsiveUtils.getPadding(context, PaddingType.medium).left
-            ),
+                horizontal:
+                    ResponsiveUtils.getPadding(context, PaddingType.medium)
+                        .left),
             child: Row(
               children: [
-                Icon(
-                  Icons.delete, 
-                  color: Colors.white, 
-                  size: ResponsiveUtils.getIconSize(context, IconSizeType.small)
-                ),
-                SizedBox(width: ResponsiveUtils.getPadding(context, PaddingType.tiny).left),
+                Icon(Icons.delete,
+                    color: Colors.white,
+                    size: ResponsiveUtils.getIconSize(
+                        context, IconSizeType.small)),
+                SizedBox(
+                    width: ResponsiveUtils.getPadding(context, PaddingType.tiny)
+                        .left),
                 Text("Delete",
-                    style: isNarrowScreen 
+                    style: isNarrowScreen
                         ? context.smallTextColor(Colors.white)
                         : context.mediumTextColor(Colors.white)),
               ],
             ),
           ),
-          // Swipe right to mark as sold
           secondaryBackground: Container(
             color: Colors.green,
             alignment: Alignment.centerRight,
             padding: EdgeInsets.symmetric(
-              horizontal: ResponsiveUtils.getPadding(context, PaddingType.medium).left
-            ),
+                horizontal:
+                    ResponsiveUtils.getPadding(context, PaddingType.medium)
+                        .left),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 Text("Mark Sold",
-                    style: isNarrowScreen 
+                    style: isNarrowScreen
                         ? context.smallTextColor(Colors.white)
                         : context.mediumTextColor(Colors.white)),
-                SizedBox(width: ResponsiveUtils.getPadding(context, PaddingType.tiny).left),
-                Icon(
-                  Icons.sell, 
-                  color: Colors.white, 
-                  size: ResponsiveUtils.getIconSize(context, IconSizeType.small)
-                ),
+                SizedBox(
+                    width: ResponsiveUtils.getPadding(context, PaddingType.tiny)
+                        .left),
+                Icon(Icons.sell,
+                    color: Colors.white,
+                    size: ResponsiveUtils.getIconSize(
+                        context, IconSizeType.small)),
               ],
             ),
           ),
-          // Disable swipe actions if pallet is closed or item is already sold
           direction: pallet.isClosed || item.isSold
               ? DismissDirection.none
               : DismissDirection.horizontal,
           confirmDismiss: (direction) async {
+            bool result = false;
             if (direction == DismissDirection.startToEnd) {
               // Delete item
-              return await _confirmDeleteItem(context, model, pallet.id, item);
+              result =
+                  await _confirmDeleteItem(context, model, pallet.id, item) ??
+                      false;
             } else if (direction == DismissDirection.endToStart) {
               // Mark item as sold
-              return await _showMarkSoldDialog(context, model, pallet.id, item);
+              result =
+                  await _showMarkSoldDialog(context, model, pallet.id, item) ??
+                      false;
             }
-            return false;
+
+            // Simpler approach to rebuild after dismissible action
+            if (result && mounted) {
+              setState(() {});
+            }
+
+            return result;
           },
           child: Card(
             margin: EdgeInsets.symmetric(
-              horizontal: ResponsiveUtils.getPadding(context, PaddingType.small).left,
-              vertical: ResponsiveUtils.getPadding(context, PaddingType.tiny).top
+              vertical: 4.0,
+              horizontal: 8.0,
             ),
             child: ListTile(
               contentPadding: ResponsiveUtils.getPaddingHV(
-                context,
-                isNarrowScreen ? PaddingType.small : PaddingType.medium,
-                PaddingType.tiny
+                  context, PaddingType.small, PaddingType.small),
+              leading: CircleAvatar(
+                backgroundColor:
+                    item.isSold ? Colors.green.shade100 : Colors.blue.shade100,
+                child: Icon(
+                  item.isSold ? Icons.check : Icons.inventory_2_outlined,
+                  color: item.isSold ? Colors.green : Colors.blue,
+                  size:
+                      ResponsiveUtils.getIconSize(context, IconSizeType.small),
+                ),
               ),
-              dense: isNarrowScreen,
               title: Text(
                 item.name,
-                style: TextStyle(
-                        fontSize:
-                            ResponsiveUtils.getFontSize(context, titleFontSize))
-                    .copyWith(fontWeight: FontWeight.bold),
+                style: isNarrowScreen
+                    ? context.smallTextWeight(FontWeight.bold)
+                    : context.mediumTextWeight(FontWeight.bold),
               ),
               subtitle: item.isSold
                   ? Text(
-                      'Sold on: ${_formatDate(item.saleDate)} for: \$${item.salePrice.toStringAsFixed(2)}',
-                      style: TextStyle(
-                          fontSize: ResponsiveUtils.getFontSize(
-                              context, subtitleFontSize)),
+                      "Sold for \$${item.salePrice.toStringAsFixed(2)} on ${_formatDate(item.saleDate)}",
+                      style: isNarrowScreen
+                          ? context.tinyTextColor(Colors.green)
+                          : context.smallTextColor(Colors.green),
                     )
                   : Text(
-                      'Not sold yet (swipe to sell or delete)',
-                      style: TextStyle(
-                          fontSize: ResponsiveUtils.getFontSize(
-                              context, subtitleFontSize)),
+                      "Not sold yet",
+                      style:
+                          isNarrowScreen ? context.tinyText : context.smallText,
                     ),
-              trailing: item.isSold
-                  ? Icon(
-                      Icons.check_circle,
-                      color: Colors.green, 
-                      size: ResponsiveUtils.getIconSize(context, IconSizeType.small)
-                    )
-                  : pallet.isClosed
-                      ? Icon(
-                          Icons.lock, 
-                          color: Colors.grey, 
-                          size: ResponsiveUtils.getIconSize(context, IconSizeType.small)
-                        )
-                      : SizedBox(
-                          width: isNarrowScreen ? 80 : 100,
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            mainAxisAlignment: MainAxisAlignment.end,
-                            children: [
-                              _ItemActionButton(
-                                icon: Icons.sell,
-                                tooltip: "Mark Sold",
-                                onPressed: () => _showMarkSoldDialog(
-                                    context, model, pallet.id, item),
-                                iconColor: Colors.blue,
-                                isNarrowScreen: isNarrowScreen,
-                              ),
-                              _ItemActionButton(
-                                icon: Icons.delete,
-                                tooltip: "Delete Item",
-                                onPressed: () => _confirmDeleteItem(
-                                    context, model, pallet.id, item),
-                                iconColor: Colors.red,
-                                isNarrowScreen: isNarrowScreen,
-                              ),
-                            ],
+              trailing: !pallet.isClosed && !item.isSold
+                  ? Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          icon: Icon(
+                            Icons.delete,
+                            size: ResponsiveUtils.getIconSize(
+                                context, IconSizeType.small),
+                            color: Colors.red,
                           ),
+                          onPressed: () async {
+                            await _confirmDeleteItem(
+                                context, model, pallet.id, item);
+                          },
                         ),
+                        IconButton(
+                          icon: Icon(
+                            Icons.sell,
+                            size: ResponsiveUtils.getIconSize(
+                                context, IconSizeType.small),
+                            color: Colors.green,
+                          ),
+                          onPressed: () async {
+                            await _showMarkSoldDialog(
+                                context, model, pallet.id, item);
+                          },
+                        ),
+                      ],
+                    )
+                  : item.isSold
+                      ? Text(
+                          "Sold",
+                          style: isNarrowScreen
+                              ? context
+                                  .tinyTextWeight(FontWeight.bold)
+                                  .copyWith(color: Colors.green)
+                              : context
+                                  .smallTextWeight(FontWeight.bold)
+                                  .copyWith(color: Colors.green),
+                        )
+                      : null,
             ),
           ),
         );
@@ -832,10 +850,6 @@ class _PalletDetailScreenState extends State<PalletDetailScreen> {
     final TextEditingController itemController = TextEditingController();
     final formKey = GlobalKey<FormState>();
     
-
-    // Check if we should use tablet layout
-    final isTablet = ResponsiveUtils.isTablet(context);
-
     showDialog(
       context: context,
       builder: (context) {
@@ -887,64 +901,7 @@ class _PalletDetailScreenState extends State<PalletDetailScreen> {
 
   void _showEditPalletNameDialog(
       BuildContext context, PalletModel model, Pallet pallet) {
-    final nameController = TextEditingController(text: pallet.name);
-    final formKey = GlobalKey<FormState>();
-
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: Text("Edit Pallet Name",
-              style: context.largeTextWeight(FontWeight.bold)),
-          content: KeyboardAware(
-            child: Form(
-              key: formKey,
-              child: TextFormField(
-                controller: nameController,
-                decoration: InputDecoration(
-                  labelText: "Pallet Name",
-                  border: OutlineInputBorder(),
-                  contentPadding: ResponsiveUtils.getPaddingHV(
-                      context, PaddingType.small, PaddingType.small),
-                  prefixIcon: Icon(
-                    Icons.edit,
-                    size: ResponsiveUtils.getIconSize(
-                        context, IconSizeType.medium),
-                  ),
-                ),
-                style: context.mediumText,
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return "Enter pallet name";
-                  }
-                  // Check for duplicate names, but allow keeping the current name
-                  if (value != pallet.name && model.palletNameExists(value)) {
-                    return "A pallet with this name already exists";
-                  }
-                  return null;
-                },
-                autofocus: true,
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text("CANCEL", style: context.mediumText),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                if (formKey.currentState!.validate()) {
-                  model.updatePalletName(pallet.id, nameController.text);
-                  Navigator.pop(context);
-                }
-              },
-              child: Text("SAVE", style: context.mediumText),
-            ),
-          ],
-        );
-      },
-    );
+    DialogUtils.showEditPalletNameDialog(context, model, pallet);
   }
 
   Future<bool?> _showMarkSoldDialog(BuildContext context, PalletModel model,
@@ -1069,61 +1026,3 @@ class _PalletDetailScreenState extends State<PalletDetailScreen> {
     );
   }
 }
-
-// Helper widget for compact item action buttons
-class _ItemActionButton extends StatelessWidget {
-  final IconData icon;
-  final String tooltip;
-  final VoidCallback onPressed;
-  final Color iconColor;
-  final bool isNarrowScreen;
-
-  const _ItemActionButton({
-    required this.icon,
-    required this.tooltip,
-    required this.onPressed,
-    required this.iconColor,
-    required this.isNarrowScreen,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final size = isNarrowScreen
-        ? ResponsiveUtils.getIconSize(context, IconSizeType.medium) + 8
-        : ResponsiveUtils.getIconSize(context, IconSizeType.medium) + 12;
-
-    final iconSize = isNarrowScreen
-        ? ResponsiveUtils.getIconSize(context, IconSizeType.small)
-        : ResponsiveUtils.getIconSize(context, IconSizeType.medium);
-
-    return Container(
-      width: size,
-      height: size,
-      margin: EdgeInsets.symmetric(horizontal: 2),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(size / 2),
-          onTap: onPressed,
-          child: Tooltip(
-            message: tooltip,
-            child: Icon(
-              icon,
-              size: iconSize,
-              color: iconColor,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-  
- /* In the code above, we have a  PalletDetailScreen  widget that displays the details of a pallet. The screen layout is responsive and adjusts based on the device size. The screen uses the  ResponsiveUtils  class to get the device size, font scale, and icon size. The screen layout changes based on the device size, with different layouts for tablets and phones. 
-  The screen uses the  Consumer  widget to listen to changes in the  PalletModel  and automatically rebuilds when the model changes. The screen displays the pallet details, action buttons, and a list of items. The screen also includes dialogs to add items, edit the pallet name, mark items as sold, and confirm marking the pallet as sold. 
-  The  _buildTabletLayout  method creates a side-by-side layout for tablets, with a sidebar for pallet info and actions, and a main panel for the items list. The  _buildPhoneLayout  method creates a stacked layout for phones, with a collapsible info card and a button row for actions. The  _buildItemsList  method creates a list of items with swipe actions to mark items as sold or delete them. 
-  The screen uses the  _ItemActionButton  widget to create compact action buttons for items. The  _ItemActionButton  widget displays an icon button with a tooltip and an  InkWell  widget for the tap effect. The  _ItemActionButton  widget adjusts the size and icon size based on the screen width. 
-  Conclusion 
-  In this tutorial, we learned how to create responsive Flutter layouts using the  ResponsiveUtils  class. We created a responsive layout for a pallet detail screen that adjusts based on the device size. We used the  ResponsiveUtils  class to get the device size, font scale, and icon size. We created different layouts for tablets and phones, with side-by-side panels for tablets and stacked panels for phones. We also created a compact action button widget for items that adjusts based on the screen width. 
-  The complete source code for this tutorial is available on  GitHub. 
-  Related Posts: Flutter Responsive Layout Tutorial Flutter Responsive Layout Tutorial Flutter State Management with Provider Flutter State Management with Provider Flutter Provider Tutorial Flutter Provider Tutorial Flutter ListView with Image and Checkbox Flutter ListView with Image and Checkbox Flutter ListView with Image and Tag Flutter ListView with Image and Tag Flutter ListView with Image and Subtitle Flutter ListView with Image and Subtitle Flutter ListView with Image and Icon Flutter ListView with Image and Icon Flutter ListView with */

@@ -327,42 +327,6 @@ enum PaddingType {
   zero, // No spacing (new)
 }
 
-/// Widget to handle keyboard visibility
-class KeyboardAware extends StatelessWidget {
-  final Widget child;
-  final bool autoscroll;
-  final ScrollController? scrollController;
-
-  const KeyboardAware({
-    super.key,
-    required this.child,
-    this.autoscroll = true,
-    this.scrollController,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final mediaQuery = MediaQuery.of(context);
-    final isKeyboardVisible = mediaQuery.viewInsets.bottom > 0;
-
-    // If keyboard is visible and autoscroll is enabled, use SingleChildScrollView
-    if (isKeyboardVisible && autoscroll) {
-      return SingleChildScrollView(
-        controller: scrollController,
-        physics: const ClampingScrollPhysics(),
-        child: Padding(
-          // Add padding at the bottom to prevent content from being obscured by keyboard
-          padding: EdgeInsets.only(bottom: mediaQuery.viewInsets.bottom),
-          child: child,
-        ),
-      );
-    }
-
-    // Otherwise, just return the child
-    return child;
-  }
-}
-
 /// Extension methods for responsive text styles
 extension ResponsiveTextExtension on BuildContext {
   
