@@ -1,8 +1,12 @@
-// analytics_screen.dart
+// analytics_screen.dart - Refactored for responsiveness - PART 1
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'pallet_model.dart';
+import 'responsive_utils.dart'; // Import the new responsive utilities
+import 'dart:math' show min;
+import 'utils/dialog_utils.dart'; // Import the dialog utils for tag filter dialog
+
 
 class AnalyticsScreen extends StatelessWidget {
   const AnalyticsScreen({super.key});
@@ -17,6 +21,7 @@ class AnalyticsScreen extends StatelessWidget {
             icon: const Icon(Icons.filter_list),
             onPressed: () => _showTagFilterDialog(context),
             tooltip: "Filter by Tag",
+            iconSize: ResponsiveUtils.getIconSize(context, IconSizeType.medium),
           ),
         ],
       ),
@@ -27,10 +32,14 @@ class AnalyticsScreen extends StatelessWidget {
           }
           
           if (palletModel.pallets.isEmpty) {
-            return const Center(
-              child: Text(
-                "No pallets added yet. Add pallets to view analytics.",
-                style: TextStyle(fontSize: 16),
+            return Center(
+              child: Padding(
+                padding: ResponsiveUtils.getPadding(context, PaddingType.medium),
+                child: Text(
+                  "No pallets added yet. Add pallets to view analytics.",
+                  style: context.mediumText,
+                  textAlign: TextAlign.center,
+                ),
               ),
             );
           }
@@ -87,188 +96,345 @@ class AnalyticsScreen extends StatelessWidget {
     Widget? filterIndicator;
     if (palletModel.currentTagFilter != null) {
       filterIndicator = Container(
-        padding: const EdgeInsets.all(8),
-        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        padding: ResponsiveUtils.getPadding(context, PaddingType.small),
+        margin: ResponsiveUtils.getPaddingHV(
+          context, 
+          PaddingType.medium, 
+          PaddingType.tiny
+        ),
         decoration: BoxDecoration(
           color: Colors.brown.shade50,
           borderRadius: BorderRadius.circular(8),
         ),
         child: Row(
           children: [
-            const Icon(Icons.filter_list, size: 16, color: Colors.brown),
-            const SizedBox(width: 8),
+            Icon(
+              Icons.filter_list, 
+              size: ResponsiveUtils.getIconSize(context, IconSizeType.small), 
+              color: Colors.brown
+            ),
+            SizedBox(width: ResponsiveUtils.getPadding(context, PaddingType.small).left),
             Expanded(
               child: Text(
                 "Filtered by tag: ${palletModel.currentTagFilter}",
-                style: TextStyle(color: Colors.brown.shade800),
+                style: context.smallTextColor(Colors.brown.shade800),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
             TextButton(
               onPressed: () => palletModel.setTagFilter(null),
-              child: const Text("Clear"),
+              child: Text("Clear", style: context.smallText),
             ),
           ],
         ),
       );
     }
 
+    // Check if we should use tablet layout
+    final isTablet = ResponsiveUtils.isTablet(context);
+    
     return SafeArea(
       child: LayoutBuilder(builder: (context, constraints) {
-        return SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Tag filter indicator
-              if (filterIndicator != null) filterIndicator,
+        // For tablet layout, we'll show the main sections side by side
+        if (isTablet) {
+          return SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Tag filter indicator
+                if (filterIndicator != null) filterIndicator,
 
-              Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Month Selector
-                    Card(
-                      elevation: 2,
-                      margin: EdgeInsets.zero,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                Padding(
+                  padding: ResponsiveUtils.getPaddingHV(
+                    context, 
+                    PaddingType.medium, 
+                    PaddingType.small
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Month Selector with responsive padding and font size
+                      _buildMonthSelector(context, currentMonth, palletModel),
+                      
+                      SizedBox(height: ResponsiveUtils.getPadding(context, PaddingType.medium).top),
+
+                      // Current month heading
+                      Text(
+                        "Month: ${_getMonthName(currentMonth.month)} ${currentMonth.year}",
+                        style: context.largeTextWeight(FontWeight.bold),
                       ),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                            vertical: 8, horizontal: 16),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.arrow_back_ios),
-                              onPressed: () => palletModel.previousMonth(),
-                            ),
-                            Text(
-                              "${_getMonthName(currentMonth.month)} ${currentMonth.year}",
-                              style: const TextStyle(
-                                  fontSize: 18, fontWeight: FontWeight.bold),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.arrow_forward_ios),
-                              onPressed: () => palletModel.nextMonth(),
-                            ),
-                          ],
-                        ),
+                      
+                      SizedBox(height: ResponsiveUtils.getPadding(context, PaddingType.small).top),
+
+                      // Main metrics grid for current month
+                      _buildMonthMetricsGrid(
+                        context,
+                        totalCostThisMonth, 
+                        revenueThisMonth,
+                        profitThisMonth, 
+                        roiThisMonth
                       ),
-                    ),
 
-                    const SizedBox(height: 16),
+                      SizedBox(height: ResponsiveUtils.getPadding(context, PaddingType.medium).top),
 
-                    // Current month heading
-                    Text(
-                      "Month: ${_getMonthName(currentMonth.month)} ${currentMonth.year}",
-                      style: const TextStyle(
-                          fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 12),
-
-                    // Main metrics grid for current month
-                    _buildMonthMetricsGrid(totalCostThisMonth, revenueThisMonth,
-                        profitThisMonth, roiThisMonth),
-
-                    const SizedBox(height: 20),
-
-                    // YTD, All-Time, and Performance Tabs with improved responsive design
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.grey.withAlpha(26),
-                            spreadRadius: 1,
-                            blurRadius: 3,
-                            offset: const Offset(0, 1),
+                      // Tablet layout: show tabs side by side
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // YTD panel
+                          Expanded(
+                            flex: 1,
+                            child: Card(
+                              elevation: 2,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: SizedBox(
+                                height: constraints.maxHeight * 0.6,
+                                child: _buildYearToDatePanel(context, palletModel),
+                              ),
+                            ),
+                          ),
+                          
+                          SizedBox(width: ResponsiveUtils.getPadding(context, PaddingType.medium).left),
+                          
+                          // All time panel
+                          Expanded(
+                            flex: 1,
+                            child: Card(
+                              elevation: 2,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: SizedBox(
+                                height: constraints.maxHeight * 0.6,
+                                child: _buildAllTimePanel(
+                                  context,
+                                  totalRevenue,
+                                  totalCost,
+                                  totalProfit,
+                                  totalPallets,
+                                  totalItemsSold
+                                ),
+                              ),
+                            ),
                           ),
                         ],
                       ),
-                      child: DefaultTabController(
-                        length: 3,
-                        child: Column(
-                          children: [
-                            // Improved tab bar styling with fixed height and better spacing
-                            Container(
-                              height: 56, // Fixed height for consistency
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: const BorderRadius.only(
-                                  topLeft: Radius.circular(12),
-                                  topRight: Radius.circular(12),
-                                ),
-                              ),
-                              child: TabBar(
-                                tabs: [
-                                  _buildTabItem("YTD"),
-                                  _buildTabItem("All Time"),
-                                  _buildTabItem("Performance"),
-                                ],
-                                labelColor: const Color(0xFF02838A),
-                                labelStyle: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 14,
-                                ),
-                                unselectedLabelColor: Colors.grey.shade600,
-                                indicatorSize: TabBarIndicatorSize.tab,
-                                indicatorWeight: 3,
-                                indicatorColor: const Color(0xFF02838A),
-                                dividerColor: Colors.transparent,
-                                // Improve spacing and layout
-                                labelPadding:
-                                    const EdgeInsets.symmetric(horizontal: 4),
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 8),
-                              ),
-                            ),
-                            const Divider(
-                                height: 1,
-                                thickness: 1,
-                                color: Color(0xFFEEEEEE)),
-                            ConstrainedBox(
-                              constraints: BoxConstraints(
-                                minHeight: 400,
-                                maxHeight: constraints.maxHeight * 0.65,
-                              ),
-                              child: TabBarView(
-                                children: [
-                                  _buildYearToDatePanel(context, palletModel),
-                                  _buildAllTimePanel(
-                                      context,
-                                      totalRevenue,
-                                      totalCost,
-                                      totalProfit,
-                                      totalPallets,
-                                      totalItemsSold),
-                                  _buildTagAnalysisPanel(context, palletModel),
-                                ],
-                              ),
+                      
+                      SizedBox(height: ResponsiveUtils.getPadding(context, PaddingType.medium).top),
+                      
+                      // Tag Analysis Panel
+                      Card(
+                        elevation: 2,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: SizedBox(
+                          height: constraints.maxHeight * 0.4,
+                          child: _buildTagAnalysisPanel(context, palletModel),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        } else {
+          // Phone layout - Original column layout but with responsive sizing
+          return SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Tag filter indicator
+                if (filterIndicator != null) filterIndicator,
+
+                Padding(
+                  padding: ResponsiveUtils.getPaddingHV(
+                    context, 
+                    PaddingType.medium, 
+                    PaddingType.small
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Month Selector with responsive padding and font size
+                      _buildMonthSelector(context, currentMonth, palletModel),
+
+                      SizedBox(height: ResponsiveUtils.getPadding(context, PaddingType.medium).top),
+
+                      // Current month heading
+                      Text(
+                        "Month: ${_getMonthName(currentMonth.month)} ${currentMonth.year}",
+                        style: context.largeTextWeight(FontWeight.bold),
+                      ),
+                      
+                      SizedBox(height: ResponsiveUtils.getPadding(context, PaddingType.small).top),
+
+                      // Main metrics grid for current month
+                      _buildMonthMetricsGrid(
+                        context,
+                        totalCostThisMonth, 
+                        revenueThisMonth,
+                        profitThisMonth, 
+                        roiThisMonth
+                      ),
+
+                      SizedBox(height: ResponsiveUtils.getPadding(context, PaddingType.medium).top),
+
+                      // YTD, All-Time, and Performance Tabs with improved responsive design
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.grey.withAlpha(26),
+                              spreadRadius: 1,
+                              blurRadius: 3,
+                              offset: const Offset(0, 1),
                             ),
                           ],
                         ),
+                        child: DefaultTabController(
+                          length: 3,
+                          child: Column(
+                            children: [
+                              // Tab bar with responsive height and better spacing
+                              _buildResponsiveTabBar(context),
+                              
+                              const Divider(
+                                  height: 1,
+                                  thickness: 1,
+                                  color: Color(0xFFEEEEEE)),
+                              
+                              SizedBox(
+                                height: min(
+                                    ResponsiveUtils.getResponsiveCardHeight(
+                                        context,
+                                        baseHeight: 350,
+                                        isExpanded: false),
+                                    constraints.maxHeight * 0.65),
+                                child: TabBarView(
+                                  children: [
+                                    _buildYearToDatePanel(context, palletModel),
+                                    _buildAllTimePanel(
+                                        context,
+                                        totalRevenue,
+                                        totalCost,
+                                        totalProfit,
+                                        totalPallets,
+                                        totalItemsSold),
+                                    _buildTagAnalysisPanel(
+                                        context, palletModel),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            ],
-          ),
-        );
+              ],
+            ),
+          );
+        }
       }),
     );
   }
 
-  // New helper method for building tab items
-  Widget _buildTabItem(String label) {
+  Widget _buildMonthSelector(BuildContext context, DateTime currentMonth, PalletModel palletModel) {
+    return Card(
+      elevation: 2,
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: ResponsiveUtils.getPaddingHV(
+          context, 
+          PaddingType.medium, 
+          PaddingType.small
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.arrow_back_ios),
+              onPressed: () => palletModel.previousMonth(),
+              iconSize: ResponsiveUtils.getIconSize(context, IconSizeType.small),
+            ),
+            Text(
+              "${_getMonthName(currentMonth.month)} ${currentMonth.year}",
+              style: context.largeTextWeight(FontWeight.bold),
+            ),
+            IconButton(
+              icon: const Icon(Icons.arrow_forward_ios),
+              onPressed: () => palletModel.nextMonth(),
+              iconSize: ResponsiveUtils.getIconSize(context, IconSizeType.small),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildResponsiveTabBar(BuildContext context) {
+    // Dynamically set tab bar height based on font scale and device size
+    final fontScale = MediaQuery.of(context).textScaleFactor;
+    final baseHeight = 56.0;
+    final adjustedHeight = baseHeight * (fontScale > 1.3 ? 1.2 : 1.0);
+    
+    return Container(
+      height: adjustedHeight,
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(12),
+          topRight: Radius.circular(12),
+        ),
+      ),
+      child: TabBar(
+        tabs: [
+          _buildTabItem(context, "YTD"),
+          _buildTabItem(context, "All Time"),
+          _buildTabItem(context, "Performance"),
+        ],
+        labelColor: const Color(0xFF02838A),
+        labelStyle: context.smallTextWeight(FontWeight.bold),
+        unselectedLabelColor: Colors.grey.shade600,
+        indicatorSize: TabBarIndicatorSize.tab,
+        indicatorWeight: 3,
+        indicatorColor: const Color(0xFF02838A),
+        dividerColor: Colors.transparent,
+        // Improve spacing and layout
+        labelPadding: ResponsiveUtils.getPaddingHV(
+          context,
+          PaddingType.tiny,
+          PaddingType.zero
+        ),
+        padding: ResponsiveUtils.getPaddingHV(
+          context,
+          PaddingType.small,
+          PaddingType.zero
+        ),
+      ),
+    );
+  }
+
+  // New helper method for building tab items with responsive sizing
+  Widget _buildTabItem(BuildContext context, String label) {
     return Tab(
       height: 48,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 4),
+        padding: ResponsiveUtils.getPaddingHV(
+          context,
+          PaddingType.tiny,
+          PaddingType.zero
+        ),
         alignment: Alignment.center,
         child: FittedBox(
           fit: BoxFit.scaleDown,
@@ -278,7 +444,8 @@ class AnalyticsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildMonthMetricsGrid(double cost, double revenue, double profit, double roi) {
+  Widget _buildMonthMetricsGrid(BuildContext context, double cost,
+      double revenue, double profit, double roi) {
     // Use a Column with Row layout instead of GridView for better control
     return Column(
       children: [
@@ -286,15 +453,19 @@ class AnalyticsScreen extends StatelessWidget {
           children: [
             Expanded(
               child: _buildCompactMetricCard(
+                context: context,
                 title: "Monthly Cost",
                 value: _formatCurrency(cost),
                 icon: Icons.shopping_cart,
                 color: Colors.orange,
               ),
             ),
-            const SizedBox(width: 12),
+            SizedBox(
+                width: ResponsiveUtils.getPadding(context, PaddingType.small)
+                    .left),
             Expanded(
               child: _buildCompactMetricCard(
+                context: context,
                 title: "Monthly Revenue",
                 value: _formatCurrency(revenue),
                 icon: Icons.attach_money,
@@ -303,20 +474,25 @@ class AnalyticsScreen extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 12),
+        SizedBox(
+            height: ResponsiveUtils.getPadding(context, PaddingType.small).top),
         Row(
           children: [
             Expanded(
               child: _buildCompactMetricCard(
+                context: context,
                 title: "Monthly Profit",
                 value: _formatCurrency(profit),
                 icon: Icons.trending_up,
                 color: profit >= 0 ? Colors.green : Colors.red,
               ),
             ),
-            const SizedBox(width: 12),
+            SizedBox(
+                width: ResponsiveUtils.getPadding(context, PaddingType.small)
+                    .left),
             Expanded(
               child: _buildCompactMetricCard(
+                context: context,
                 title: "Monthly ROI",
                 value: "${roi.toStringAsFixed(1)}%",
                 icon: Icons.show_chart,
@@ -330,51 +506,7 @@ class AnalyticsScreen extends StatelessWidget {
   }
 
   void _showTagFilterDialog(BuildContext context) {
-    final palletModel = Provider.of<PalletModel>(context, listen: false);
-    
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text("Filter by Tag"),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: palletModel.savedTags.isEmpty
-                ? const Text("No tags saved yet.")
-                : Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      // Add "All" option
-                      FilterChip(
-                        label: const Text("All"),
-                        selected: palletModel.currentTagFilter == null,
-                        onSelected: (_) {
-                          palletModel.setTagFilter(null);
-                          Navigator.pop(context);
-                        },
-                      ),
-                      // Add chips for each tag
-                      ...palletModel.savedTags.map((tag) => FilterChip(
-                        label: Text(tag),
-                        selected: palletModel.currentTagFilter == tag,
-                        onSelected: (_) {
-                          palletModel.setTagFilter(tag);
-                          Navigator.pop(context);
-                        },
-                      )),
-                    ],
-                  ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text("Close"),
-            ),
-          ],
-        );
-      },
-    );
+    DialogUtils.showTagFilterDialog(context);
   }
 
   Widget _buildYearToDatePanel(BuildContext context, PalletModel model) {
@@ -394,13 +526,13 @@ class AnalyticsScreen extends StatelessWidget {
     );
 
     return Padding(
-      padding: const EdgeInsets.all(12.0),
+      padding: ResponsiveUtils.getPadding(context, PaddingType.medium),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           // YTD Profit with calendar icon - enhanced design
           Container(
-            padding: const EdgeInsets.all(16),
+            padding: ResponsiveUtils.getPadding(context, PaddingType.medium),
             width: double.infinity, // Ensure full width
             decoration: BoxDecoration(
               color: Colors.white,
@@ -420,26 +552,22 @@ class AnalyticsScreen extends StatelessWidget {
                   children: [
                     Icon(
                       Icons.calendar_today,
-                      size: 20,
+                      size: ResponsiveUtils.getIconSize(context, IconSizeType.small),
                       color: const Color(0xFF02838A),
                     ),
-                    const SizedBox(width: 8),
+                    SizedBox(width: ResponsiveUtils.getPadding(context, PaddingType.small).left),
                     Text(
                       "YTD Profit",
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
+                      style: context.mediumTextWeight(FontWeight.w600).copyWith(
                         color: Colors.grey.shade800,
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
+                SizedBox(height: ResponsiveUtils.getPadding(context, PaddingType.small).top),
                 Text(
                   _formatCurrency(ytdProfit),
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
+                  style: context.xLargeTextWeight(FontWeight.bold).copyWith(
                     color: ytdProfit >= 0 ? Colors.green : Colors.red,
                   ),
                   textAlign: TextAlign.center,
@@ -448,25 +576,31 @@ class AnalyticsScreen extends StatelessWidget {
             ),
           ),
 
-          const SizedBox(height: 16),
+          SizedBox(height: ResponsiveUtils.getPadding(context, PaddingType.medium).top),
 
           // Monthly Breakdown Header with refined styling
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+            padding: ResponsiveUtils.getPaddingHV(
+              context,
+              PaddingType.small,
+              PaddingType.medium
+            ),
             decoration: BoxDecoration(
               color: const Color(0xFF02838A).withAlpha(15),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Row(
               children: [
-                Icon(Icons.insights, size: 18, color: const Color(0xFF02838A)),
-                const SizedBox(width: 8),
+                Icon(
+                  Icons.insights, 
+                  size: ResponsiveUtils.getIconSize(context, IconSizeType.small),
+                  color: const Color(0xFF02838A)
+                ),
+                SizedBox(width: ResponsiveUtils.getPadding(context, PaddingType.small).left),
                 Text(
                   "Monthly Breakdown",
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
+                  style: context.mediumTextWeight(FontWeight.bold).copyWith(
                     color: Colors.grey.shade800,
                   ),
                 ),
@@ -474,7 +608,7 @@ class AnalyticsScreen extends StatelessWidget {
             ),
           ),
 
-          const SizedBox(height: 8),
+          SizedBox(height: ResponsiveUtils.getPadding(context, PaddingType.small).top),
 
           // Enhanced monthly list with fixed height and better styling
           Expanded(
@@ -505,8 +639,11 @@ class AnalyticsScreen extends StatelessWidget {
                   return Container(
                     color: index % 2 == 0 ? Colors.grey.shade50 : Colors.white,
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 12),
+                      padding: ResponsiveUtils.getPaddingHV(
+                        context,
+                        PaddingType.medium,
+                        PaddingType.small
+                      ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
@@ -517,12 +654,11 @@ class AnalyticsScreen extends StatelessWidget {
                                   width: 6,
                                   height: 24,
                                   decoration: BoxDecoration(
-                                    color:
-                                        profit >= 0 ? Colors.green : Colors.red,
+                                    color: profit >= 0 ? Colors.green : Colors.red,
                                     borderRadius: BorderRadius.circular(3),
                                   ),
                                 ),
-                                const SizedBox(width: 12),
+                                SizedBox(width: ResponsiveUtils.getPadding(context, PaddingType.small).left),
                                 // Use FittedBox for responsive text
                                 Expanded(
                                   child: FittedBox(
@@ -530,9 +666,7 @@ class AnalyticsScreen extends StatelessWidget {
                                     alignment: Alignment.centerLeft,
                                     child: Text(
                                       _getMonthName(month.month),
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w500,
-                                        fontSize: 15,
+                                      style: context.mediumTextWeight(FontWeight.w500).copyWith(
                                         color: Colors.grey.shade800,
                                       ),
                                     ),
@@ -543,10 +677,8 @@ class AnalyticsScreen extends StatelessWidget {
                           ),
                           Text(
                             _formatCurrency(profit),
-                            style: TextStyle(
+                            style: context.mediumTextWeight(FontWeight.bold).copyWith(
                               color: profit >= 0 ? Colors.green : Colors.red,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 15,
                             ),
                           ),
                         ],
@@ -562,51 +694,53 @@ class AnalyticsScreen extends StatelessWidget {
     );
   }
 
+  // analytics_screen.dart - Refactored for responsiveness - PART 4
+
   Widget _buildAllTimePanel(BuildContext context, double revenue, double cost, double profit, int palletCount, int itemsSold) {
     // Calculate overall ROI
     final overallROI = cost > 0 ? (profit / cost * 100) : 0.0;
     final avgProfit = itemsSold > 0 ? (profit / itemsSold) : 0.0;
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16.0),
+      padding: ResponsiveUtils.getPadding(context, PaddingType.medium),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Header
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 12),
+            padding: ResponsiveUtils.getPadding(context, PaddingType.small),
             decoration: BoxDecoration(
               color: const Color(0xFF02838A),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Text(
+            child: Text(
               "All-Time Performance",
-              style: TextStyle(
+              style: context.mediumTextWeight(FontWeight.bold).copyWith(
                 color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
               ),
               textAlign: TextAlign.center,
             ),
           ),
           
-          const SizedBox(height: 16),
+          SizedBox(height: ResponsiveUtils.getPadding(context, PaddingType.medium).top),
           
-          // Main metrics
+          // Main metrics with responsive sizing
           Row(
             children: [
               Expanded(
                 child: _buildStatsCard(
+                  context: context,
                   title: "Revenue",
                   value: _formatCurrency(revenue),
                   icon: Icons.account_balance_wallet,
                   color: Colors.blue,
                 ),
               ),
-              const SizedBox(width: 12),
+              SizedBox(width: ResponsiveUtils.getPadding(context, PaddingType.small).left),
               Expanded(
                 child: _buildStatsCard(
+                  context: context,
                   title: "Cost",
                   value: _formatCurrency(cost),
                   icon: Icons.shopping_cart,
@@ -616,21 +750,23 @@ class AnalyticsScreen extends StatelessWidget {
             ],
           ),
           
-          const SizedBox(height: 12),
+          SizedBox(height: ResponsiveUtils.getPadding(context, PaddingType.small).top),
           
           Row(
             children: [
               Expanded(
                 child: _buildStatsCard(
+                  context: context,
                   title: "Profit",
                   value: _formatCurrency(profit),
                   icon: Icons.trending_up,
                   color: profit >= 0 ? Colors.green : Colors.red,
                 ),
               ),
-              const SizedBox(width: 12),
+              SizedBox(width: ResponsiveUtils.getPadding(context, PaddingType.small).left),
               Expanded(
                 child: _buildStatsCard(
+                  context: context,
                   title: "ROI",
                   value: "${overallROI.toStringAsFixed(1)}%",
                   icon: Icons.show_chart,
@@ -640,45 +776,52 @@ class AnalyticsScreen extends StatelessWidget {
             ],
           ),
           
-          const SizedBox(height: 16),
+          SizedBox(height: ResponsiveUtils.getPadding(context, PaddingType.medium).top),
           
           // Summary metrics
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+            padding: ResponsiveUtils.getPaddingHV(
+              context,
+              PaddingType.medium,
+              PaddingType.small
+            ),
             decoration: BoxDecoration(
               color: Colors.grey.shade100,
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Text(
+            child: Text(
               "Summary",
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              style: context.mediumTextWeight(FontWeight.bold),
               textAlign: TextAlign.center,
             ),
           ),
           
-          const SizedBox(height: 12),
+          SizedBox(height: ResponsiveUtils.getPadding(context, PaddingType.small).top),
           
           Row(
             children: [
               Expanded(
                 child: _buildSimpleStatsCard(
+                  context: context,
                   title: "Total Pallets",
                   value: palletCount.toString(),
                   icon: Icons.inventory_2,
                 ),
               ),
-              const SizedBox(width: 12),
+              SizedBox(width: ResponsiveUtils.getPadding(context, PaddingType.small).left),
               Expanded(
                 child: _buildSimpleStatsCard(
+                  context: context,
                   title: "Items Sold",
                   value: itemsSold.toString(),
                   icon: Icons.sell,
                 ),
               ),
-              const SizedBox(width: 12),
+              SizedBox(width: ResponsiveUtils.getPadding(context, PaddingType.small).left),
               Expanded(
                 child: _buildSimpleStatsCard(
+                  context: context,
                   title: "Avg Profit/Item",
                   value: _formatCurrency(avgProfit),
                   icon: Icons.analytics,
@@ -696,23 +839,29 @@ class AnalyticsScreen extends StatelessWidget {
     final profitByTag = model.getProfitByTag();
     
     if (profitByTag.isEmpty) {
-      return const Center(
+      return Center(
         child: Padding(
-          padding: EdgeInsets.all(20.0),
+          padding: ResponsiveUtils.getPadding(context, PaddingType.medium),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.tag, size: 48, color: Colors.grey),
-              SizedBox(height: 16),
+              Icon(
+                Icons.tag, 
+                size: ResponsiveUtils.getIconSize(context, IconSizeType.xLarge),
+                color: Colors.grey
+              ),
+              SizedBox(height: ResponsiveUtils.getPadding(context, PaddingType.medium).top),
               Text(
                 "No tagged inventory yet",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey),
+                style: context.largeTextWeight(FontWeight.bold).copyWith(
+                  color: Colors.grey,
+                ),
                 textAlign: TextAlign.center,
               ),
-              SizedBox(height: 8),
+              SizedBox(height: ResponsiveUtils.getPadding(context, PaddingType.small).top),
               Text(
                 "Add tags to your pallets to see performance analysis",
-                style: TextStyle(fontSize: 16, color: Colors.grey),
+                style: context.mediumTextColor(Colors.grey),
                 textAlign: TextAlign.center,
               ),
             ],
@@ -726,36 +875,40 @@ class AnalyticsScreen extends StatelessWidget {
       ..sort((a, b) => b.value.compareTo(a.value));
     
     return Padding(
-      padding: const EdgeInsets.all(16.0),
+      padding: ResponsiveUtils.getPadding(context, PaddingType.medium),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+            padding: ResponsiveUtils.getPaddingHV(
+              context,
+              PaddingType.medium,
+              PaddingType.small
+            ),
             decoration: BoxDecoration(
               color: const Color(0xFF02838A),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Text(
+            child: Text(
               "Inventory Performance",
-              style: TextStyle(
+              style: context.mediumTextWeight(FontWeight.bold).copyWith(
                 color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
               ),
               textAlign: TextAlign.center,
             ),
           ),
           
-          const SizedBox(height: 12),
+          SizedBox(height: ResponsiveUtils.getPadding(context, PaddingType.small).top),
           
-          const Text(
+          Text(
             "Tap any category to filter your inventory by that tag",
-            style: TextStyle(fontSize: 14, fontStyle: FontStyle.italic, color: Colors.grey),
+            style: context.smallTextColor(Colors.grey).copyWith(
+              fontStyle: FontStyle.italic,
+            ),
           ),
           
-          const SizedBox(height: 12),
+          SizedBox(height: ResponsiveUtils.getPadding(context, PaddingType.small).top),
           
           Expanded(
             child: ListView.builder(
@@ -781,7 +934,9 @@ class AnalyticsScreen extends StatelessWidget {
                 }
                 
                 return Card(
-                  margin: const EdgeInsets.only(bottom: 8),
+                  margin: EdgeInsets.only(
+                    bottom: ResponsiveUtils.getPadding(context, PaddingType.small).bottom
+                  ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
@@ -794,7 +949,7 @@ class AnalyticsScreen extends StatelessWidget {
                     },
                     borderRadius: BorderRadius.circular(8),
                     child: Padding(
-                      padding: const EdgeInsets.all(12.0),
+                      padding: ResponsiveUtils.getPadding(context, PaddingType.medium),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -812,27 +967,23 @@ class AnalyticsScreen extends StatelessWidget {
                                         ? Icons.arrow_upward
                                         : Icons.arrow_downward),
                                   color: Colors.white,
-                                  size: 16,
+                                  size: ResponsiveUtils.getIconSize(context, IconSizeType.small),
                                 ),
                               ),
-                              const SizedBox(width: 12),
+                              SizedBox(width: ResponsiveUtils.getPadding(context, PaddingType.small).left),
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
                                       tag,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 16,
-                                      ),
+                                      style: context.mediumTextWeight(FontWeight.bold),
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                     if (statusText.isNotEmpty)
                                       Text(
                                         statusText,
-                                        style: TextStyle(
-                                          fontSize: 12,
+                                        style: context.smallText.copyWith(
                                           color: isTopPerformer
                                             ? Colors.amber.shade800
                                             : Colors.grey,
@@ -843,31 +994,29 @@ class AnalyticsScreen extends StatelessWidget {
                                   ],
                                 ),
                               ),
-                              const SizedBox(width: 8),
+                              SizedBox(width: ResponsiveUtils.getPadding(context, PaddingType.small).left),
                               Column(
                                 crossAxisAlignment: CrossAxisAlignment.end,
                                 children: [
                                   Text(
                                     _formatCurrency(profit),
-                                    style: TextStyle(
+                                    style: context.mediumTextWeight(FontWeight.bold).copyWith(
                                       color: profit >= 0 ? Colors.green : Colors.red,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 16,
                                     ),
                                   ),
-                                  const Text(
+                                  Text(
                                     "Tap to filter",
-                                    style: TextStyle(fontSize: 10, color: Colors.grey),
+                                    style: context.tinyTextColor(Colors.grey),
                                   ),
                                 ],
                               ),
                             ],
                           ),
                           if (isTopPerformer) ...[
-                            const SizedBox(height: 8),
-                            const Text(
+                            SizedBox(height: ResponsiveUtils.getPadding(context, PaddingType.small).top),
+                            Text(
                               "Find more items like this to maximize profits!",
-                              style: TextStyle(fontSize: 12),
+                              style: context.smallText,
                             ),
                           ],
                         ],
@@ -884,6 +1033,7 @@ class AnalyticsScreen extends StatelessWidget {
   }
 
   Widget _buildCompactMetricCard({
+    required BuildContext context,
     required String title,
     required String value,
     required IconData icon,
@@ -894,36 +1044,42 @@ class AnalyticsScreen extends StatelessWidget {
     if (value.contains('{') && value.contains('}')) {
       displayValue = "0.00"; // Fallback if template isn't interpolated
     }
-    
+
     return Card(
       elevation: 2,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(10),
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+        padding: ResponsiveUtils.getPaddingHV(
+            context, PaddingType.small, PaddingType.small),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: color, size: 22),
-            const SizedBox(height: 6),
+            Icon(icon,
+                color: color,
+                size:
+                    ResponsiveUtils.getIconSize(context, IconSizeType.medium)),
+            SizedBox(
+                height:
+                    ResponsiveUtils.getPadding(context, PaddingType.tiny).top),
             Text(
               title,
-              style: const TextStyle(fontSize: 13),
+              style: context.smallText,
               textAlign: TextAlign.center,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
-            const SizedBox(height: 6),
+            SizedBox(
+                height:
+                    ResponsiveUtils.getPadding(context, PaddingType.tiny).top),
             FittedBox(
               fit: BoxFit.scaleDown,
               child: Text(
                 displayValue,
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: color,
-                ),
+                style: context.largeTextWeight(FontWeight.bold).copyWith(
+                      color: color,
+                    ),
                 maxLines: 1,
               ),
             ),
@@ -932,8 +1088,9 @@ class AnalyticsScreen extends StatelessWidget {
       ),
     );
   }
-  
+
   Widget _buildStatsCard({
+    required BuildContext context,
     required String title,
     required String value,
     required IconData icon,
@@ -945,30 +1102,32 @@ class AnalyticsScreen extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: ResponsiveUtils.getPadding(context, PaddingType.medium),
         child: Column(
           children: [
-            Icon(icon, color: color, size: 24),
-            const SizedBox(height: 8),
+            Icon(icon,
+                color: color,
+                size:
+                    ResponsiveUtils.getIconSize(context, IconSizeType.medium)),
+            SizedBox(
+                height:
+                    ResponsiveUtils.getPadding(context, PaddingType.small).top),
             Text(
               title,
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-              ),
+              style: context.smallTextWeight(FontWeight.w500),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
-            const SizedBox(height: 4),
+            SizedBox(
+                height:
+                    ResponsiveUtils.getPadding(context, PaddingType.tiny).top),
             FittedBox(
               fit: BoxFit.scaleDown,
               child: Text(
                 value,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: color,
-                ),
+                style: context.mediumTextWeight(FontWeight.bold).copyWith(
+                      color: color,
+                    ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -980,6 +1139,7 @@ class AnalyticsScreen extends StatelessWidget {
   }
 
   Widget _buildSimpleStatsCard({
+    required BuildContext context,
     required String title,
     required String value,
     required IconData icon,
@@ -991,25 +1151,30 @@ class AnalyticsScreen extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+        padding: ResponsiveUtils.getPaddingHV(
+            context, PaddingType.small, PaddingType.small),
         child: Column(
           children: [
-            Icon(icon, size: 20, color: Colors.grey.shade700),
-            const SizedBox(height: 4),
+            Icon(icon,
+                size: ResponsiveUtils.getIconSize(context, IconSizeType.small),
+                color: Colors.grey.shade700),
+            SizedBox(
+                height:
+                    ResponsiveUtils.getPadding(context, PaddingType.tiny).top),
             Text(
               title,
-              style: const TextStyle(fontSize: 12),
+              style: context.smallText,
               textAlign: TextAlign.center,
               overflow: TextOverflow.ellipsis,
             ),
-            const SizedBox(height: 4),
+            SizedBox(
+                height:
+                    ResponsiveUtils.getPadding(context, PaddingType.tiny).top),
             Text(
               value,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: valueColor,
-              ),
+              style: context.smallTextWeight(FontWeight.bold).copyWith(
+                    color: valueColor,
+                  ),
               overflow: TextOverflow.ellipsis,
             ),
           ],
