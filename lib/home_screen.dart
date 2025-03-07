@@ -1,4 +1,4 @@
-// File: lib/home_screen.dart - Refactored for responsiveness - PART 1
+// File: lib/home_screen.dart - Updated to use AppTheme
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 // Import with prefix to avoid ambiguity
@@ -6,8 +6,10 @@ import 'inventory_screen.dart' as inventory;
 import 'analytics_screen.dart';
 import 'pallet_model.dart';
 import 'pallet_detail_screen.dart';
-import 'responsive_utils.dart'; // Import the new responsive utilities
-import 'utils/dialog_utils.dart'; // Import the new dialog utilities
+import 'responsive_utils.dart';
+import 'utils/dialog_utils.dart';
+// Import app theme
+import 'theme/theme_extensions.dart'; // Import theme extensions
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -17,11 +19,10 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-
   @override
   Widget build(BuildContext context) {
     // Check if we should use tablet layout
-    final isTablet = ResponsiveUtils.isTablet(context);
+    final isTablet = context.isTablet;
 
     return Scaffold(
       body: SafeArea(
@@ -40,8 +41,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     title: Text(
                       "Pallet Pro",
                       style: context.largeTextWeight(FontWeight.bold).copyWith(
-                        color: Colors.white,
-                      ),
+                            color: Colors.white,
+                          ),
                     ),
                     background: Container(
                       decoration: BoxDecoration(
@@ -49,8 +50,8 @@ class _HomeScreenState extends State<HomeScreen> {
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
                           colors: [
-                            const Color(0xFF026670), // Darker teal
-                            const Color(0xFF02838A), // Main teal
+                            context.primaryDarkColor, // Using theme extension
+                            context.primaryColor, // Using theme extension
                           ],
                         ),
                       ),
@@ -80,10 +81,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: ResponsiveUtils.getPaddingHV(
-                      context,
-                      PaddingType.medium,
-                      PaddingType.small
-                    ),
+                        context, PaddingType.medium, PaddingType.small),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -91,7 +89,10 @@ class _HomeScreenState extends State<HomeScreen> {
                           "Quick Actions",
                           style: context.largeTextWeight(FontWeight.bold),
                         ),
-                        SizedBox(height: ResponsiveUtils.getPadding(context, PaddingType.small).top),
+                        SizedBox(
+                            height: ResponsiveUtils.getPadding(
+                                    context, PaddingType.small)
+                                .top),
                         // Restructured to ensure equal height and proper scaling for medium font sizes
                         _buildQuickActionCards(context),
                       ],
@@ -102,7 +103,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 // Analytics Section
                 SliverToBoxAdapter(
                   child: Padding(
-                    padding: ResponsiveUtils.getPadding(context, PaddingType.medium),
+                    padding:
+                        ResponsiveUtils.getPadding(context, PaddingType.medium),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -110,7 +112,10 @@ class _HomeScreenState extends State<HomeScreen> {
                           "Business Insights",
                           style: context.largeTextWeight(FontWeight.bold),
                         ),
-                        SizedBox(height: ResponsiveUtils.getPadding(context, PaddingType.medium).top),
+                        SizedBox(
+                            height: ResponsiveUtils.getPadding(
+                                    context, PaddingType.medium)
+                                .top),
                         _buildAnalyticsCard(
                           context,
                           palletModel,
@@ -128,7 +133,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 // Recent Activity with responsive layout considerations
                 SliverToBoxAdapter(
                   child: Padding(
-                    padding: ResponsiveUtils.getPadding(context, PaddingType.medium),
+                    padding:
+                        ResponsiveUtils.getPadding(context, PaddingType.medium),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -136,7 +142,10 @@ class _HomeScreenState extends State<HomeScreen> {
                           "Recent Activity",
                           style: context.largeTextWeight(FontWeight.bold),
                         ),
-                        SizedBox(height: ResponsiveUtils.getPadding(context, PaddingType.medium).top),
+                        SizedBox(
+                            height: ResponsiveUtils.getPadding(
+                                    context, PaddingType.medium)
+                                .top),
                         // Grid view for tablets, list view for phones
                         isTablet
                             ? _buildRecentActivityGrid(context, palletModel)
@@ -145,10 +154,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                 ),
-                
+
                 // Add bottom padding to ensure content is not hidden by navigation elements
                 SliverToBoxAdapter(
-                  child: SizedBox(height: MediaQuery.of(context).padding.bottom + 16),
+                  child: SizedBox(
+                      height: MediaQuery.of(context).padding.bottom + 16),
                 ),
               ],
             );
@@ -164,24 +174,13 @@ class _HomeScreenState extends State<HomeScreen> {
     final itemsSold = model.totalSoldItems;
 
     // Check if we should use tablet layout for more space
-    final isTablet = ResponsiveUtils.isTablet(context);
+    final isTablet = context.isTablet;
 
     return Container(
       padding: ResponsiveUtils.getPadding(context, PaddingType.medium),
       margin: ResponsiveUtils.getPaddingHV(
           context, PaddingType.medium, PaddingType.medium),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            spreadRadius: 1,
-            blurRadius: 5,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
+      decoration: context.standardBoxDecoration,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
@@ -189,7 +188,7 @@ class _HomeScreenState extends State<HomeScreen> {
             context: context,
             label: "Total Profit",
             value: "\$${profit.toStringAsFixed(2)}",
-            color: profit >= 0 ? Colors.green : Colors.red,
+            color: profit >= 0 ? context.successColor : context.errorColor,
             icon: Icons.trending_up,
           ),
           SizedBox(
@@ -200,7 +199,7 @@ class _HomeScreenState extends State<HomeScreen> {
             context: context,
             label: "Pallets",
             value: totalPallets.toString(),
-            color: Colors.blue,
+            color: context.infoColor,
             icon: Icons.inventory_2,
           ),
           SizedBox(
@@ -211,7 +210,7 @@ class _HomeScreenState extends State<HomeScreen> {
             context: context,
             label: "Items Sold",
             value: itemsSold.toString(),
-            color: Colors.orange,
+            color: context.warningColor,
             icon: Icons.sell,
           ),
         ],
@@ -220,50 +219,55 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildStatItem({
-  required BuildContext context,
-  required String label,
-  required String value,
-  required Color color,
-  required IconData icon,
-}) {
-  // Adjust font size based on text length to prevent overflow
-  final valueLength = value.length;
-  final fontSize = valueLength > 8
-      ? FontSizeType.small
-      : (valueLength > 5 ? FontSizeType.medium : FontSizeType.large);
-  
-  return Column(
-    children: [
-      Icon(
-        icon, 
-        color: color, 
-        size: ResponsiveUtils.getIconSize(context, IconSizeType.medium)
-      ),
-      SizedBox(height: ResponsiveUtils.getPadding(context, PaddingType.tiny).top),
-      FittedBox(
-        fit: BoxFit.scaleDown,
-        child: Text(
-          value,
-          style: fontSize == FontSizeType.small
-              ? context.smallTextWeight(FontWeight.bold).copyWith(color: color)
-              : (fontSize == FontSizeType.medium
-                  ? context.mediumTextWeight(FontWeight.bold).copyWith(color: color)
-                  : context.largeTextWeight(FontWeight.bold).copyWith(color: color)),
+    required BuildContext context,
+    required String label,
+    required String value,
+    required Color color,
+    required IconData icon,
+  }) {
+    // Adjust font size based on text length to prevent overflow
+    final valueLength = value.length;
+    final fontSize = valueLength > 8
+        ? FontSizeType.small
+        : (valueLength > 5 ? FontSizeType.medium : FontSizeType.large);
+
+    return Column(
+      children: [
+        Icon(icon,
+            color: color,
+            size: ResponsiveUtils.getIconSize(context, IconSizeType.medium)),
+        SizedBox(
+            height: ResponsiveUtils.getPadding(context, PaddingType.tiny).top),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            value,
+            style: fontSize == FontSizeType.small
+                ? context
+                    .smallTextWeight(FontWeight.bold)
+                    .copyWith(color: color)
+                : (fontSize == FontSizeType.medium
+                    ? context
+                        .mediumTextWeight(FontWeight.bold)
+                        .copyWith(color: color)
+                    : context
+                        .largeTextWeight(FontWeight.bold)
+                        .copyWith(color: color)),
+          ),
         ),
-      ),
-      Text(
-        label,
-        style: context.smallTextColor(Colors.grey),
-      ),
-    ],
-  );
-}
+        Text(
+          label,
+          style: context.smallTextColor(Colors.grey),
+        ),
+      ],
+    );
+  }
 
   // Enhanced method for building quick action cards with better visual cues
   Widget _buildQuickActionCards(BuildContext context) {
     return LayoutBuilder(builder: (context, constraints) {
       final isVeryNarrow = constraints.maxWidth < 300;
-      
+
       // For very narrow screens, stack cards vertically
       if (isVeryNarrow) {
         return Column(
@@ -273,7 +277,7 @@ class _HomeScreenState extends State<HomeScreen> {
               icon: Icons.inventory_2_outlined,
               title: "Manage Inventory",
               subtitle: "Browse and track items",
-              color: Colors.blue.shade600,
+              color: context.infoColor,
               maxWidth: constraints.maxWidth,
               onTap: () => Navigator.push(
                 context,
@@ -282,20 +286,22 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
             ),
-            SizedBox(height: ResponsiveUtils.getPadding(context, PaddingType.small).top),
+            SizedBox(
+                height:
+                    ResponsiveUtils.getPadding(context, PaddingType.small).top),
             _buildActionCard(
               context,
               icon: Icons.add_box_rounded,
               title: "Add Pallet",
               subtitle: "Create new inventory",
-              color: Colors.green.shade600,
+              color: context.successColor,
               maxWidth: constraints.maxWidth,
               onTap: () => showAddPalletDialog(context),
             ),
           ],
         );
       }
-      
+
       // For other screens, use a row layout
       return Row(
         children: [
@@ -305,7 +311,7 @@ class _HomeScreenState extends State<HomeScreen> {
               icon: Icons.inventory_2_outlined,
               title: "Manage Inventory",
               subtitle: "Browse and track items",
-              color: Colors.blue.shade600,
+              color: context.infoColor,
               maxWidth: constraints.maxWidth / 2 - 8,
               onTap: () => Navigator.push(
                 context,
@@ -315,14 +321,16 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           ),
-          SizedBox(width: ResponsiveUtils.getPadding(context, PaddingType.small).left),
+          SizedBox(
+              width:
+                  ResponsiveUtils.getPadding(context, PaddingType.small).left),
           Expanded(
             child: _buildActionCard(
               context,
               icon: Icons.add_box_rounded,
               title: "Add Pallet",
               subtitle: "Create new inventory",
-              color: Colors.green.shade600,
+              color: context.successColor,
               maxWidth: constraints.maxWidth / 2 - 8,
               onTap: () => showAddPalletDialog(context),
             ),
@@ -344,18 +352,16 @@ class _HomeScreenState extends State<HomeScreen> {
     // Enhanced card design with clearer visual hierarchy and better action indication
     // Get font scale to adjust padding
     final fontScale = MediaQuery.of(context).textScaleFactor;
-    final padding = fontScale > 1.3 
-        ? ResponsiveUtils.getPadding(context, PaddingType.small) 
+    final padding = fontScale > 1.3
+        ? ResponsiveUtils.getPadding(context, PaddingType.small)
         : ResponsiveUtils.getPadding(context, PaddingType.medium);
 
     return Card(
       elevation: 3,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
+      shape: context.largeRoundedShape,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: context.largeBorderRadius,
         child: Padding(
           padding: padding,
           child: Column(
@@ -364,8 +370,10 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               // Larger, more visible icon with background
               Container(
-                width: ResponsiveUtils.getIconSize(context, IconSizeType.xLarge),
-                height: ResponsiveUtils.getIconSize(context, IconSizeType.xLarge),
+                width:
+                    ResponsiveUtils.getIconSize(context, IconSizeType.xLarge),
+                height:
+                    ResponsiveUtils.getIconSize(context, IconSizeType.xLarge),
                 decoration: BoxDecoration(
                   color: color.withOpacity(0.15),
                   shape: BoxShape.circle,
@@ -374,11 +382,14 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: Icon(
                     icon,
                     color: color,
-                    size: ResponsiveUtils.getIconSize(context, IconSizeType.medium),
+                    size: ResponsiveUtils.getIconSize(
+                        context, IconSizeType.medium),
                   ),
                 ),
               ),
-              SizedBox(height: ResponsiveUtils.getPadding(context, PaddingType.small).top),
+              SizedBox(
+                  height: ResponsiveUtils.getPadding(context, PaddingType.small)
+                      .top),
               // Centered, prominent title
               Text(
                 title,
@@ -387,7 +398,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
-              SizedBox(height: ResponsiveUtils.getPadding(context, PaddingType.tiny).top),
+              SizedBox(
+                  height: ResponsiveUtils.getPadding(context, PaddingType.tiny)
+                      .top),
               // Subtitle with better contrast
               Text(
                 subtitle,
@@ -396,17 +409,23 @@ class _HomeScreenState extends State<HomeScreen> {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
-              SizedBox(height: ResponsiveUtils.getPadding(context, PaddingType.small).top),
+              SizedBox(
+                  height: ResponsiveUtils.getPadding(context, PaddingType.small)
+                      .top),
               // Visual indicator that this is an action
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
                     Icons.touch_app,
-                    size: ResponsiveUtils.getIconSize(context, IconSizeType.tiny),
+                    size:
+                        ResponsiveUtils.getIconSize(context, IconSizeType.tiny),
                     color: color.withOpacity(0.7),
                   ),
-                  SizedBox(width: ResponsiveUtils.getPadding(context, PaddingType.tiny).left),
+                  SizedBox(
+                      width:
+                          ResponsiveUtils.getPadding(context, PaddingType.tiny)
+                              .left),
                   Text(
                     "Tap to access",
                     style: context.tinyText.copyWith(
@@ -435,12 +454,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Card(
       elevation: 3,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
+      shape: context.largeRoundedShape,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: context.largeBorderRadius,
         child: Padding(
           padding: ResponsiveUtils.getPadding(context, PaddingType.medium),
           child: Column(
@@ -456,11 +473,15 @@ class _HomeScreenState extends State<HomeScreen> {
                   Icon(
                     Icons.analytics,
                     color: Colors.brown.shade300,
-                    size: ResponsiveUtils.getIconSize(context, IconSizeType.medium),
+                    size: ResponsiveUtils.getIconSize(
+                        context, IconSizeType.medium),
                   ),
                 ],
               ),
-              SizedBox(height: ResponsiveUtils.getPadding(context, PaddingType.medium).top),
+              SizedBox(
+                  height:
+                      ResponsiveUtils.getPadding(context, PaddingType.medium)
+                          .top),
 
               // Modified profit display with better overflow handling
               Row(
@@ -480,9 +501,13 @@ class _HomeScreenState extends State<HomeScreen> {
                           alignment: Alignment.centerLeft,
                           child: Text(
                             profitText,
-                            style: context.xLargeTextWeight(FontWeight.bold).copyWith(
-                              color: profit >= 0 ? Colors.green : Colors.red,
-                            ),
+                            style: context
+                                .xLargeTextWeight(FontWeight.bold)
+                                .copyWith(
+                                  color: profit >= 0
+                                      ? context.successColor
+                                      : context.errorColor,
+                                ),
                             maxLines: 1,
                           ),
                         ),
@@ -500,9 +525,13 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                         Text(
                           roiText,
-                          style: context.xLargeTextWeight(FontWeight.bold).copyWith(
-                            color: roi >= 0 ? Colors.green : Colors.red,
-                          ),
+                          style: context
+                              .xLargeTextWeight(FontWeight.bold)
+                              .copyWith(
+                                color: roi >= 0
+                                    ? context.successColor
+                                    : context.errorColor,
+                              ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -511,7 +540,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ],
               ),
-              SizedBox(height: ResponsiveUtils.getPadding(context, PaddingType.medium).top),
+              SizedBox(
+                  height:
+                      ResponsiveUtils.getPadding(context, PaddingType.medium)
+                          .top),
               Center(
                 child: Text(
                   "Tap to view detailed analytics →",
@@ -549,9 +581,12 @@ class _HomeScreenState extends State<HomeScreen> {
     return Column(
       children: displayPallets.map((pallet) {
         return Card(
-          margin: EdgeInsets.only(bottom: ResponsiveUtils.getPadding(context, PaddingType.small).bottom),
+          margin: EdgeInsets.only(
+              bottom: ResponsiveUtils.getPadding(context, PaddingType.small)
+                  .bottom),
           child: ListTile(
-            contentPadding: ResponsiveUtils.getPadding(context, PaddingType.small),
+            contentPadding:
+                ResponsiveUtils.getPadding(context, PaddingType.small),
             leading: CircleAvatar(
               backgroundColor: Colors.brown.shade100,
               child: Icon(
@@ -575,8 +610,10 @@ class _HomeScreenState extends State<HomeScreen> {
             trailing: Text(
               "\$${pallet.profit.toStringAsFixed(2)}",
               style: context.mediumTextWeight(FontWeight.bold).copyWith(
-                color: pallet.profit >= 0 ? Colors.green : Colors.red,
-              ),
+                    color: pallet.profit >= 0
+                        ? context.successColor
+                        : context.errorColor,
+                  ),
             ),
             onTap: () => Navigator.push(
               context,
@@ -589,7 +626,7 @@ class _HomeScreenState extends State<HomeScreen> {
       }).toList(),
     );
   }
-  
+
   // New method for tablet grid layout of recent activity
   Widget _buildRecentActivityGrid(BuildContext context, PalletModel model) {
     if (model.pallets.isEmpty) {
@@ -611,7 +648,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final recentPallets = [...model.pallets]
       ..sort((a, b) => b.date.compareTo(a.date));
     final displayPallets = recentPallets.take(6).toList();
-    
+
     // Create a grid with 2 items per row
     return GridView.builder(
       shrinkWrap: true,
@@ -619,8 +656,10 @@ class _HomeScreenState extends State<HomeScreen> {
       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
         childAspectRatio: 3,
-        crossAxisSpacing: ResponsiveUtils.getPadding(context, PaddingType.small).right,
-        mainAxisSpacing: ResponsiveUtils.getPadding(context, PaddingType.small).bottom,
+        crossAxisSpacing:
+            ResponsiveUtils.getPadding(context, PaddingType.small).right,
+        mainAxisSpacing:
+            ResponsiveUtils.getPadding(context, PaddingType.small).bottom,
       ),
       itemCount: displayPallets.length,
       itemBuilder: (context, index) {
@@ -645,12 +684,18 @@ class _HomeScreenState extends State<HomeScreen> {
                         backgroundColor: Colors.brown.shade100,
                         radius: 16,
                         child: Icon(
-                          pallet.isClosed ? Icons.check_circle : Icons.inventory,
+                          pallet.isClosed
+                              ? Icons.check_circle
+                              : Icons.inventory,
                           color: Colors.brown,
-                          size: ResponsiveUtils.getIconSize(context, IconSizeType.small),
+                          size: ResponsiveUtils.getIconSize(
+                              context, IconSizeType.small),
                         ),
                       ),
-                      SizedBox(width: ResponsiveUtils.getPadding(context, PaddingType.small).left),
+                      SizedBox(
+                          width: ResponsiveUtils.getPadding(
+                                  context, PaddingType.small)
+                              .left),
                       Expanded(
                         child: Text(
                           pallet.name,
@@ -661,14 +706,20 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       Text(
                         "\$${pallet.profit.toStringAsFixed(2)}",
-                        style: context.mediumTextWeight(FontWeight.bold).copyWith(
-                          color: pallet.profit >= 0 ? Colors.green : Colors.red,
-                        ),
+                        style:
+                            context.mediumTextWeight(FontWeight.bold).copyWith(
+                                  color: pallet.profit >= 0
+                                      ? context.successColor
+                                      : context.errorColor,
+                                ),
                       ),
                     ],
                   ),
                   Padding(
-                    padding: EdgeInsets.only(left: ResponsiveUtils.getPadding(context, PaddingType.medium).left),
+                    padding: EdgeInsets.only(
+                        left: ResponsiveUtils.getPadding(
+                                context, PaddingType.medium)
+                            .left),
                     child: Text(
                       "Tag: ${pallet.tag} • ${pallet.items.length} items (${pallet.soldItemsCount} sold)",
                       style: context.smallText,

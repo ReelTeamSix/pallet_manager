@@ -5,6 +5,7 @@ import 'pallet_model.dart';
 import 'home_screen.dart';
 import 'inventory_screen.dart' as inventory;
 import 'analytics_screen.dart';
+import 'theme/app_theme.dart'; // Import app theme
 
 void main() {
   // Ensure Flutter binding is initialized
@@ -26,10 +27,8 @@ class PalletApp extends StatelessWidget {
         final mediaQuery = MediaQuery.of(context);
         final isTablet = mediaQuery.size.shortestSide >= 600;
 
-        
-
-        return AppLifecycleManager(child: 
-          MaterialApp(
+        return AppLifecycleManager(
+          child: MaterialApp(
             title: 'Pallet Pro',
             // Enable system font scaling with reasonable limits
             builder: (context, child) {
@@ -97,158 +96,9 @@ class PalletApp extends StatelessWidget {
                 child: child!,
               );
             },
-            theme: ThemeData(
-              primarySwatch: Colors.teal,
-              scaffoldBackgroundColor: Colors.grey[50],
-
-              // Adaptive app bar for different device sizes
-              appBarTheme: AppBarTheme(
-                backgroundColor: const Color(0xFF02838A),
-                titleTextStyle: TextStyle(
-                  color: Colors.white,
-                  fontSize: isTablet ? 22 : 20,
-                  fontWeight: FontWeight.bold,
-                ),
-                // Taller app bar for tablets
-                toolbarHeight: isTablet ? 64 : 56,
-                iconTheme: const IconThemeData(color: Colors.white),
-                // Responsive padding
-                actionsIconTheme: IconThemeData(
-                  color: Colors.white,
-                  size: isTablet ? 28 : 24,
-                ),
-              ),
-
-              // Button theme with responsive sizing
-              elevatedButtonTheme: ElevatedButtonThemeData(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF02838A),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8.0),
-                  ),
-                  // Larger touch targets on tablets
-                  padding: EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: isTablet ? 12 : 10,
-                  ),
-                  // Larger text on tablets
-                  textStyle: TextStyle(
-                    fontSize: isTablet ? 16 : 14,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-
-              // Text button theme with responsive sizing
-              textButtonTheme: TextButtonThemeData(
-                style: TextButton.styleFrom(
-                  foregroundColor: const Color(0xFF02838A),
-                  // Increased padding for better touch targets
-                  padding: EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: isTablet ? 10 : 8,
-                  ),
-                  // Responsive text
-                  textStyle: TextStyle(
-                    fontSize: isTablet ? 15 : 14,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-
-              // Add responsive card themes
-              cardTheme: CardTheme(
-                elevation: 2,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                margin: EdgeInsets.symmetric(
-                  vertical: 4,
-                  horizontal: isTablet ? 10 : 8,
-                ),
-              ),
-
-              // Make input decoration more adaptive
-              inputDecorationTheme: InputDecorationTheme(
-                isDense: !isTablet, // Only dense on phones
-                contentPadding: EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: isTablet ? 16 : 12,
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                // Responsive label text
-                labelStyle: TextStyle(
-                  fontSize: isTablet ? 16 : 14,
-                ),
-                // Responsive hint text
-                hintStyle: TextStyle(
-                  fontSize: isTablet ? 15 : 14,
-                  color: Colors.grey.shade500,
-                ),
-              ),
-
-              // Adaptive divider for different screens
-              dividerTheme: DividerThemeData(
-                space: isTablet ? 16 : 12,
-                thickness: 1,
-                color: Colors.grey.shade300,
-              ),
-
-              // Adaptive chip theme for tags, etc.
-              chipTheme: ChipThemeData(
-                padding: EdgeInsets.symmetric(
-                  horizontal: isTablet ? 10 : 8,
-                  vertical: isTablet ? 8 : 6,
-                ),
-                labelStyle: TextStyle(
-                  fontSize: isTablet ? 14 : 12,
-                ),
-                iconTheme: IconThemeData(
-                  size: isTablet ? 18 : 16,
-                ),
-              ),
-
-              // Color scheme
-              colorScheme: ColorScheme.light(
-                primary: const Color(0xFF02838A),
-                secondary: const Color(0xFFFF9800),
-                error: Colors.red[700]!,
-                surface: Colors.white,
-                background: Colors.grey[50]!,
-              ),
-
-              // Responsive dialog theme
-              dialogTheme: DialogTheme(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                titleTextStyle: TextStyle(
-                  fontSize: isTablet ? 22 : 20,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black,
-                ),
-                contentTextStyle: TextStyle(
-                  fontSize: isTablet ? 16 : 14,
-                  color: Colors.black87,
-                ),
-              ),
-
-              // Responsive bottom sheet theme
-              bottomSheetTheme: BottomSheetThemeData(
-                shape: const RoundedRectangleBorder(
-                  borderRadius: BorderRadius.vertical(
-                    top: Radius.circular(16),
-                  ),
-                ),
-                // More space on tablets
-                constraints: BoxConstraints(
-                  maxWidth: isTablet ? 600 : double.infinity,
-                ),
-              ),
-            ),
+            // Use AppTheme to get the theme based on device type and brightness
+            theme: AppTheme.getTheme(
+                isTablet: isTablet, brightness: Brightness.light),
             // Use a custom route generator for responsive page transitions
             onGenerateRoute: (settings) {
               // Get appropriate transition for device type
@@ -268,8 +118,6 @@ class PalletApp extends StatelessWidget {
               );
             },
             home: const HomeScreen(),
-            // Provide a default error screen that's responsive
-            
           ),
         );
       }),
