@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../pallet_model.dart';
 import '../responsive_utils.dart';
+// Import app theme
+import '../theme/theme_extensions.dart'; // Import theme extensions
 
 /// A utility class for common dialog operations across the app
 /// This reduces code duplication in multiple screens
@@ -71,7 +73,7 @@ class DialogUtils {
                   width: double.infinity,
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF02838A),
+                      backgroundColor: context.primaryColor,
                       padding: EdgeInsets.symmetric(vertical: 12),
                     ),
                     onPressed: () => Navigator.pop(context),
@@ -238,6 +240,7 @@ class DialogUtils {
             onPressed: submitForm,
             child: Text("ADD", style: context.mediumText),
             style: ElevatedButton.styleFrom(
+              backgroundColor: context.primaryColor,
               minimumSize: Size(60, 36),
             ),
           ),
@@ -268,12 +271,13 @@ class DialogUtils {
                   children: [
                     // All option
                     ListTile(
-                      leading: Icon(Icons.all_inclusive, color: Colors.orange),
+                      leading:
+                          Icon(Icons.all_inclusive, color: context.accentColor),
                       title: Text("All",
                           style: TextStyle(fontWeight: FontWeight.bold)),
                       selected: palletModel.currentTagFilter == null,
                       tileColor: palletModel.currentTagFilter == null
-                          ? Colors.orange.withOpacity(0.2)
+                          ? context.accentColor.withOpacity(0.2)
                           : null,
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8)),
@@ -286,13 +290,14 @@ class DialogUtils {
                     // Build tag list items dynamically from saved tags
                     ...tagsList
                         .map((tag) => ListTile(
-                              leading: Icon(Icons.label, color: Colors.teal),
+                              leading: Icon(Icons.label,
+                                  color: context.primaryColor),
                               title: Text(tag,
                                   style:
                                       TextStyle(fontWeight: FontWeight.bold)),
                               selected: palletModel.currentTagFilter == tag,
                               tileColor: palletModel.currentTagFilter == tag
-                                  ? Colors.teal.withOpacity(0.2)
+                                  ? context.primaryColor.withOpacity(0.2)
                                   : null,
                               shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(8)),
@@ -308,7 +313,8 @@ class DialogUtils {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: Text("CLOSE", style: TextStyle(color: Colors.teal)),
+                  child: Text("CLOSE",
+                      style: TextStyle(color: context.primaryColor)),
                 ),
               ],
             );
@@ -371,6 +377,9 @@ class DialogUtils {
                 }
               },
               child: Text("SAVE", style: context.mediumText),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: context.primaryColor,
+              ),
             ),
           ],
         );
