@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'pallet_model.dart';
 import 'responsive_utils.dart'; // Import responsive utilities
 import 'utils/dialog_utils.dart'; // Import dialog utilities
+import 'item_detail_screen.dart'; // Import item detail screen
 
 class PalletDetailScreen extends StatefulWidget {
   final Pallet pallet;
@@ -804,6 +805,18 @@ class _PalletDetailScreenState extends State<PalletDetailScreen> {
                                   .copyWith(color: Colors.green),
                         )
                       : null,
+              // Add this onTap handler to navigate to the item detail screen
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => ItemDetailScreen(
+                      pallet: pallet,
+                      item: item,
+                    ),
+                  ),
+                );
+              },
             ),
           ),
         );
@@ -850,10 +863,10 @@ class _PalletDetailScreenState extends State<PalletDetailScreen> {
   void _showAddItemDialog(BuildContext context, Pallet pallet) {
     final TextEditingController itemController = TextEditingController();
     final formKey = GlobalKey<FormState>();
-    
+
     showDialog(
       context: context,
-      builder: (context) {
+      builder: (dialogContext) {
         return AlertDialog(
           title: Text("Add New Item",
               style: context.largeTextWeight(FontWeight.bold)),
@@ -881,15 +894,30 @@ class _PalletDetailScreenState extends State<PalletDetailScreen> {
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () => Navigator.pop(dialogContext),
               child: Text("CANCEL", style: context.mediumText),
             ),
             ElevatedButton(
               onPressed: () {
                 if (formKey.currentState!.validate()) {
-                  Provider.of<PalletModel>(context, listen: false)
-                      .addItemToPallet(pallet.id, itemController.text);
-                  Navigator.pop(context);
+                  // Add item to pallet and get its reference
+                  final PalletItem newItem =
+                      Provider.of<PalletModel>(context, listen: false)
+                          .addItemToPallet(pallet.id, itemController.text);
+
+                  // Close the dialog
+                  Navigator.pop(dialogContext);
+
+                  // Navigate to the item detail screen with the new item
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => ItemDetailScreen(
+                        pallet: pallet,
+                        item: newItem,
+                      ),
+                    ),
+                  );
                 }
               },
               child: Text("ADD", style: context.mediumText),

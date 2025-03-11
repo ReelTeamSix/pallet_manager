@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:math';
 
 class PalletItem {
   int id;
@@ -8,7 +9,14 @@ class PalletItem {
   double salePrice;
   bool isSold;
   DateTime? saleDate;
-  double allocatedCost; // Add a field to track allocated cost
+  double allocatedCost;
+
+  // Add these new fields:
+  double? retailPrice;
+  String? condition;
+  double? listPrice;
+  String? productCode;
+  List<String>? photos;
 
   PalletItem({
     required this.id,
@@ -16,10 +24,16 @@ class PalletItem {
     this.salePrice = 0.0,
     this.isSold = false,
     this.saleDate,
-    this.allocatedCost = 0.0, // Initialize with zero
+    this.allocatedCost = 0.0,
+    // Add these new parameters:
+    this.retailPrice,
+    this.condition,
+    this.listPrice,
+    this.productCode,
+    this.photos,
   });
 
-  // Update toJson to include allocatedCost
+  // Update toJson to include new fields
   Map<String, dynamic> toJson() => {
         'id': id,
         'name': name,
@@ -27,9 +41,15 @@ class PalletItem {
         'isSold': isSold,
         'saleDate': saleDate?.toIso8601String(),
         'allocatedCost': allocatedCost,
+        // Add these new fields:
+        'retailPrice': retailPrice,
+        'condition': condition,
+        'listPrice': listPrice,
+        'productCode': productCode,
+        'photos': photos,
       };
 
-  // Update fromJson to handle allocatedCost
+  // Update fromJson to handle new fields
   factory PalletItem.fromJson(Map<String, dynamic> json) => PalletItem(
         id: json['id'],
         name: json['name'],
@@ -40,6 +60,17 @@ class PalletItem {
         allocatedCost: json['allocatedCost'] != null
             ? (json['allocatedCost'] as num).toDouble()
             : 0.0,
+        // Add these new fields:
+        retailPrice: json['retailPrice'] != null
+            ? (json['retailPrice'] as num).toDouble()
+            : null,
+        condition: json['condition'],
+        listPrice: json['listPrice'] != null
+            ? (json['listPrice'] as num).toDouble()
+            : null,
+        productCode: json['productCode'],
+        photos:
+            json['photos'] != null ? List<String>.from(json['photos']) : null,
       );
 }
 
@@ -392,15 +423,36 @@ class PalletModel extends ChangeNotifier {
     saveData();
   }
 
-  void addItemToPallet(int palletId, String itemName) {
-    final palletIndex = _pallets.indexWhere((p) => p.id == palletId);
-    if (palletIndex >= 0) {
-      _pallets[palletIndex].items.add(
-        PalletItem(id: _itemIdCounter++, name: itemName)
-      );
-      notifyListeners();
-      saveData();
+  PalletItem addItemToPallet(int palletId, String itemName) {
+    final palletIndex = pallets.indexWhere((p) => p.id == palletId);
+    if (palletIndex < 0) {
+      return PalletItem(
+          id: -1, name: ""); // Return empty item if pallet not found
     }
+
+    // Create new item
+    final itemId = _generateItemId(palletId);
+    final newItem = PalletItem(
+      id: itemId,
+      name: itemName,
+      // Remove the date parameter if it's not part of your constructor
+    );
+
+    // Add to pallet
+    pallets[palletIndex].items.add(newItem);
+
+    // Save changes
+    saveData();
+    notifyListeners();
+
+    return newItem; // Return the newly created item
+  }
+
+// Helper method to generate a unique item ID
+  int _generateItemId(int palletId) {
+    final pallet = pallets.firstWhere((p) => p.id == palletId);
+    if (pallet.items.isEmpty) return 1;
+    return pallet.items.map((i) => i.id).reduce(max) + 1;
   }
 
   void removeItemFromPallet(int palletId, int itemId) {
@@ -541,6 +593,38 @@ class PalletModel extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  // Update item details with new information
+  void updateItemDetails({
+    required int palletId,
+    required int itemId,
+    String? name,
+    double? retailPrice,
+    String? condition,
+    double? listPrice,
+    String? productCode,
+    List<String>? photos,
+  }) {
+    final palletIndex = _pallets.indexWhere((p) => p.id == palletId);
+    if (palletIndex < 0) return;
+
+    final itemIndex =
+        _pallets[palletIndex].items.indexWhere((i) => i.id == itemId);
+    if (itemIndex < 0) return;
+
+    final item = _pallets[palletIndex].items[itemIndex];
+
+    // Update fields if provided
+    if (name != null) item.name = name;
+    if (retailPrice != null) item.retailPrice = retailPrice;
+    if (condition != null) item.condition = condition;
+    if (listPrice != null) item.listPrice = listPrice;
+    if (productCode != null) item.productCode = productCode;
+    if (photos != null) item.photos = photos;
+
+    notifyListeners();
+    saveData();
   }
 
 }
