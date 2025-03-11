@@ -10,6 +10,7 @@ import 'responsive_utils.dart';
 import 'utils/dialog_utils.dart';
 // Import app theme
 import 'theme/theme_extensions.dart'; // Import theme extensions
+import 'item_detail_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -266,7 +267,9 @@ class _HomeScreenState extends State<HomeScreen> {
   // Enhanced method for building quick action cards with better visual cues
   Widget _buildQuickActionCards(BuildContext context) {
     return LayoutBuilder(builder: (context, constraints) {
-      final isVeryNarrow = constraints.maxWidth < 300;
+      final deviceWidth = constraints.maxWidth;
+      final isVeryNarrow = deviceWidth < 300;
+      final isWide = deviceWidth > 600; // For tablet layouts
 
       // For very narrow screens, stack cards vertically
       if (isVeryNarrow) {
@@ -298,11 +301,94 @@ class _HomeScreenState extends State<HomeScreen> {
               maxWidth: constraints.maxWidth,
               onTap: () => showAddPalletDialog(context),
             ),
+            SizedBox(
+                height:
+                    ResponsiveUtils.getPadding(context, PaddingType.small).top),
+            _buildActionCard(
+              context,
+              icon: Icons.add_shopping_cart,
+              title: "Add Item",
+              subtitle: "Quick item creation",
+              color: context.accentColor,
+              maxWidth: constraints.maxWidth,
+              onTap: () => _showQuickAddItemDialog(context),
+            ),
           ],
         );
       }
 
-      // For other screens, use a row layout
+      // Two-row layout for phone screens (not very narrow and not tablet)
+      if (!isWide && !isVeryNarrow) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // First row with two cards
+            Row(
+              children: [
+                Expanded(
+                  child: _buildActionCard(
+                    context,
+                    icon: Icons.inventory_2_outlined,
+                    title: "Manage Inventory",
+                    subtitle: "Browse and track items",
+                    color: context.infoColor,
+                    maxWidth: (deviceWidth -
+                            ResponsiveUtils.getPadding(
+                                    context, PaddingType.small)
+                                .left) /
+                        2,
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const inventory.InventoryScreen(),
+                      ),
+                    ),
+                  ),
+                ),
+                SizedBox(
+                    width:
+                        ResponsiveUtils.getPadding(context, PaddingType.small)
+                            .left),
+                Expanded(
+                  child: _buildActionCard(
+                    context,
+                    icon: Icons.add_box_rounded,
+                    title: "Add Pallet",
+                    subtitle: "Create new inventory",
+                    color: context.successColor,
+                    maxWidth: (deviceWidth -
+                            ResponsiveUtils.getPadding(
+                                    context, PaddingType.small)
+                                .left) /
+                        2,
+                    onTap: () => showAddPalletDialog(context),
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(
+                height:
+                    ResponsiveUtils.getPadding(context, PaddingType.small).top),
+            // Second row with centered card, but not full width
+            Center(
+              child: SizedBox(
+                width: deviceWidth * 0.65, // 65% of width for the third card
+                child: _buildActionCard(
+                  context,
+                  icon: Icons.add_shopping_cart,
+                  title: "Add Item",
+                  subtitle: "Quick item creation",
+                  color: context.accentColor,
+                  maxWidth: deviceWidth * 0.65,
+                  onTap: () => _showQuickAddItemDialog(context),
+                ),
+              ),
+            ),
+          ],
+        );
+      }
+
+      // For wide screens (tablets), use original row layout
       return Row(
         children: [
           Expanded(
@@ -312,7 +398,7 @@ class _HomeScreenState extends State<HomeScreen> {
               title: "Manage Inventory",
               subtitle: "Browse and track items",
               color: context.infoColor,
-              maxWidth: constraints.maxWidth / 2 - 8,
+              maxWidth: constraints.maxWidth / 3 - 8,
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -331,13 +417,213 @@ class _HomeScreenState extends State<HomeScreen> {
               title: "Add Pallet",
               subtitle: "Create new inventory",
               color: context.successColor,
-              maxWidth: constraints.maxWidth / 2 - 8,
+              maxWidth: constraints.maxWidth / 3 - 8,
               onTap: () => showAddPalletDialog(context),
+            ),
+          ),
+          SizedBox(
+              width:
+                  ResponsiveUtils.getPadding(context, PaddingType.small).left),
+          Expanded(
+            child: _buildActionCard(
+              context,
+              icon: Icons.add_shopping_cart,
+              title: "Add Item",
+              subtitle: "Quick item creation",
+              color: context.accentColor,
+              maxWidth: constraints.maxWidth / 3 - 8,
+              onTap: () => _showQuickAddItemDialog(context),
             ),
           ),
         ],
       );
     });
+  }
+
+  void _showQuickAddItemDialog(BuildContext context) {
+    final palletModel = Provider.of<PalletModel>(context, listen: false);
+
+    // If there are no pallets, show a message and offer to create one
+    if (palletModel.pallets.isEmpty) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text("No Pallets Available",
+              style: context.largeTextWeight(FontWeight.bold)),
+          content: Text("You need to create a pallet before you can add items.",
+              style: context.mediumText),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text("CANCEL", style: context.mediumText),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                showAddPalletDialog(context);
+              },
+              child: Text("ADD PALLET", style: context.mediumText),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    // If there are only closed pallets, show a message
+    final openPallets = palletModel.pallets.where((p) => !p.isClosed).toList();
+    if (openPallets.isEmpty) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text("No Open Pallets",
+              style: context.largeTextWeight(FontWeight.bold)),
+          content: Text(
+              "All your pallets are closed. Open a pallet before adding items.",
+              style: context.mediumText),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text("OK", style: context.mediumText),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    // Otherwise, continue with the dialog
+    final TextEditingController itemNameController = TextEditingController();
+    Pallet selectedPallet = openPallets.first;
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: Text("Quick Add Item",
+                  style: context.largeTextWeight(FontWeight.bold)),
+              content: KeyboardAware(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Item name input
+                    Text("Item Name",
+                        style: context.smallTextWeight(FontWeight.bold)),
+                    SizedBox(height: 6),
+                    TextFormField(
+                      controller: itemNameController,
+                      decoration: InputDecoration(
+                        hintText: "Enter item name",
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        prefixIcon: Icon(Icons.inventory_2_outlined),
+                      ),
+                      style: context.mediumText,
+                      textCapitalization: TextCapitalization.words,
+                      autofocus: true,
+                    ),
+
+                    SizedBox(height: 16),
+
+                    // Pallet selection
+                    Text("Select Pallet",
+                        style: context.smallTextWeight(FontWeight.bold)),
+                    SizedBox(height: 6),
+                    Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey.shade300),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      padding: EdgeInsets.symmetric(horizontal: 12),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<Pallet>(
+                          isExpanded: true,
+                          value: selectedPallet,
+                          icon: Icon(Icons.arrow_drop_down),
+                          elevation: 16,
+                          style: context.mediumText.copyWith(
+                              color: Colors.black87), // Fixed text color
+                          onChanged: (Pallet? newValue) {
+                            if (newValue != null) {
+                              setState(() {
+                                selectedPallet = newValue;
+                              });
+                            }
+                          },
+                          items: openPallets
+                              .map<DropdownMenuItem<Pallet>>((Pallet pallet) {
+                            return DropdownMenuItem<Pallet>(
+                              value: pallet,
+                              child: Row(
+                                children: [
+                                  Icon(Icons.inventory_2_outlined,
+                                      color:
+                                          context.primaryColor), // Better icon
+                                  SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      pallet.name,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: context.mediumText.copyWith(
+                                          color: Colors
+                                              .black87), // Fixed text color
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: Text("CANCEL", style: context.mediumText),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: context.primaryColor),
+                  onPressed: () {
+                    if (itemNameController.text.trim().isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text("Please enter an item name")));
+                      return;
+                    }
+
+                    // Add the item to the selected pallet
+                    final PalletItem newItem = palletModel.addItemToPallet(
+                        selectedPallet.id, itemNameController.text.trim());
+
+                    // Close dialog
+                    Navigator.pop(dialogContext);
+
+                    // Navigate to the item detail screen
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => ItemDetailScreen(
+                          pallet: selectedPallet,
+                          item: newItem,
+                        ),
+                      ),
+                    );
+                  },
+                  child: Text("ADD", style: context.mediumText),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   Widget _buildActionCard(
