@@ -149,8 +149,7 @@ class SupabaseService {
     try {
       LogUtils.info('Creating pallet item ${item.id} for pallet $palletId');
       
-      // Prepare data for insertion with correct schema column names
-      // Only include fields that actually exist in the database schema
+      // Prepare data for insertion with fields matching the exact database schema
       final data = {
         'pallet_id': palletId,
         'original_id': item.id,
@@ -538,9 +537,7 @@ class SupabaseService {
                   : null,
               allocatedCost: (item['allocated_cost'] != null 
                   ? (item['allocated_cost'] as num).toDouble() 
-                  : (item['purchase_price'] != null 
-                      ? (item['purchase_price'] as num).toDouble() 
-                      : 0.0)),
+                  : 0.0),
               retailPrice: item['retail_price'] != null 
                   ? (item['retail_price'] as num).toDouble() 
                   : null,
@@ -676,9 +673,7 @@ class SupabaseService {
             : null,
         allocatedCost: (item['allocated_cost'] != null 
             ? (item['allocated_cost'] as num).toDouble() 
-            : (item['purchase_price'] != null 
-                ? (item['purchase_price'] as num).toDouble() 
-                : 0.0)),
+            : 0.0),
         retailPrice: item['retail_price'] != null 
             ? (item['retail_price'] as num).toDouble() 
             : null,
