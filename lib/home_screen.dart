@@ -10,6 +10,7 @@ import 'responsive_utils.dart';
 import 'utils/dialog_utils.dart';
 // Import app theme
 import 'theme/theme_extensions.dart'; // Import theme extensions
+import 'theme/app_theme.dart'; // Import for BrandAssets
 import 'item_detail_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -38,33 +39,122 @@ class _HomeScreenState extends State<HomeScreen> {
                   expandedHeight: isTablet ? 250.0 : 200.0,
                   floating: false,
                   pinned: true,
+                  actions: [
+                    // Add settings button
+                    IconButton(
+                      icon: const Icon(Icons.settings, color: Colors.white),
+                      onPressed: () {
+                        Navigator.pushNamed(context, '/settings');
+                      },
+                    ),
+                  ],
                   flexibleSpace: FlexibleSpaceBar(
+                    expandedTitleScale: 1.2,
+                    titlePadding: EdgeInsets.only(left: 16, bottom: 16),
                     title: Text(
-                      "Pallet Pro",
-                      style: context.largeTextWeight(FontWeight.bold).copyWith(
-                            color: Colors.white,
-                          ),
+                      "Pallet Manager",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 20,
+                      ),
                     ),
                     background: Container(
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
                           colors: [
-                            context.primaryDarkColor, // Using theme extension
-                            context.primaryColor, // Using theme extension
+                            Theme.of(context).colorScheme.primary,
+                            Theme.of(context).colorScheme.primary.withBlue(
+                                  Theme.of(context).colorScheme.primary.blue + 20,
+                                ),
                           ],
                         ),
                       ),
                       child: Stack(
+                        fit: StackFit.expand,
                         children: [
+                          // Decorative elements
                           Positioned(
-                            right: -50,
-                            top: -20,
+                            right: -30,
+                            top: -30,
                             child: Icon(
-                              Icons.inventory_2,
+                              Icons.view_in_ar_rounded,
                               size: isTablet ? 250 : 180,
                               color: Colors.white.withOpacity(0.1),
+                            ),
+                          ),
+                          
+                          // Header content
+                          Positioned(
+                            left: 24,
+                            top: MediaQuery.of(context).padding.top + 24,
+                            right: 24,
+                            child: Row(
+                              children: [
+                                // App logo
+                                BrandAssets.getIcon(context, size: 48),
+                                const SizedBox(width: 16),
+                                
+                                // Welcome text
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        "Welcome Back",
+                                        style: TextStyle(
+                                          color: Colors.white.withOpacity(0.9),
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Consumer<PalletModel>(
+                                        builder: (context, model, _) {
+                                          final profit = model.totalProfit;
+                                          return Row(
+                                            children: [
+                                              Text(
+                                                "Total Profit: ",
+                                                style: TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 14,
+                                                ),
+                                              ),
+                                              Text(
+                                                "\$${profit.toStringAsFixed(2)}",
+                                                style: TextStyle(
+                                                  color: profit >= 0 
+                                                      ? Colors.greenAccent 
+                                                      : Colors.redAccent,
+                                                  fontSize: 14,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ],
+                                          );
+                                        }
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          
+                          // Wave pattern at the bottom
+                          Positioned(
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            height: 30,
+                            child: CustomPaint(
+                              painter: WavePainter(
+                                color: Theme.of(context).scaffoldBackgroundColor,
+                              ),
+                              size: Size.infinite,
                             ),
                           ),
                         ],
@@ -1025,4 +1115,42 @@ class _HomeScreenState extends State<HomeScreen> {
   void showAddPalletDialog(BuildContext context) {
     DialogUtils.showAddPalletDialog(context);
   }
+}
+
+class WavePainter extends CustomPainter {
+  final Color color;
+  
+  WavePainter({required this.color});
+  
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+    
+    final path = Path();
+    
+    // Start at bottom left
+    path.moveTo(0, size.height);
+    
+    // Draw wave pattern
+    path.cubicTo(
+      size.width * 0.25,
+      size.height * 0.6,
+      size.width * 0.5,
+      size.height * 1.2,
+      size.width,
+      size.height * 0.8,
+    );
+    
+    // Complete the path
+    path.lineTo(size.width, size.height);
+    path.lineTo(0, size.height);
+    path.close();
+    
+    canvas.drawPath(path, paint);
+  }
+  
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

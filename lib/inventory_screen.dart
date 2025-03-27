@@ -158,14 +158,33 @@ class _InventoryScreenState extends State<InventoryScreen> {
             child: GridView.builder(
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 2,
-                childAspectRatio: 2.5,
+                childAspectRatio: 1.6, // Updated for new card design
                 crossAxisSpacing: ResponsiveUtils.getPadding(context, PaddingType.small).left,
                 mainAxisSpacing: ResponsiveUtils.getPadding(context, PaddingType.small).top,
               ),
               itemCount: palletModel.pallets.length,
               itemBuilder: (context, index) {
                 final pallet = palletModel.pallets[index];
-                return _buildTabletPalletCard(context, pallet, palletModel);
+                return AnimatedBuilder(
+                  animation: ModalRoute.of(context)!.animation!,
+                  child: _buildTabletPalletCard(context, pallet, palletModel),
+                  builder: (context, child) {
+                    return FadeTransition(
+                      opacity: Tween<double>(
+                        begin: 0.0,
+                        end: 1.0,
+                      ).animate(CurvedAnimation(
+                        parent: ModalRoute.of(context)!.animation!,
+                        curve: Interval(
+                          0.05 * (index % 4),
+                          0.6,
+                          curve: Curves.easeInOut,
+                        ),
+                      )),
+                      child: child,
+                    );
+                  },
+                );
               },
             ),
           ),
@@ -189,213 +208,25 @@ class _InventoryScreenState extends State<InventoryScreen> {
             itemCount: palletModel.pallets.length,
             itemBuilder: (context, index) {
               final pallet = palletModel.pallets[index];
-
-              // Using a more compact layout for narrow screens
-              return Dismissible(
-                key: Key(pallet.id.toString()),
-                background: Container(
-                  color: Colors.red,
-                  alignment: Alignment.centerLeft,
-                  padding: EdgeInsets.symmetric(
-                    horizontal: ResponsiveUtils.getPadding(context, PaddingType.medium).left
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.delete, 
-                        color: Colors.white, 
-                        size: ResponsiveUtils.getIconSize(context, IconSizeType.small)
+              return AnimatedBuilder(
+                animation: ModalRoute.of(context)!.animation!,
+                child: _buildPhonePalletCard(context, pallet, palletModel),
+                builder: (context, child) {
+                  return SlideTransition(
+                    position: Tween<Offset>(
+                      begin: Offset(1, 0),
+                      end: Offset(0, 0),
+                    ).animate(CurvedAnimation(
+                      parent: ModalRoute.of(context)!.animation!,
+                      curve: Interval(
+                        0.1 + 0.05 * index,
+                        0.4 + 0.05 * index,
+                        curve: Curves.easeOut,
                       ),
-                      SizedBox(width: ResponsiveUtils.getPadding(context, PaddingType.tiny).left),
-                      Text(
-                        "Delete",
-                        style: context.smallTextColor(Colors.white),
-                      ),
-                    ],
-                  ),
-                ),
-                secondaryBackground: Container(
-                  color: Colors.green,
-                  alignment: Alignment.centerRight,
-                  padding: EdgeInsets.symmetric(
-                    horizontal: ResponsiveUtils.getPadding(context, PaddingType.medium).left
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      Text(
-                        "Mark Sold",
-                        style: context.smallTextColor(Colors.white),
-                      ),
-                      SizedBox(width: ResponsiveUtils.getPadding(context, PaddingType.tiny).left),
-                      Icon(
-                        Icons.sell, 
-                        color: Colors.white, 
-                        size: ResponsiveUtils.getIconSize(context, IconSizeType.small)
-                      ),
-                    ],
-                  ),
-                ),
-                confirmDismiss: (direction) async {
-                  if (direction == DismissDirection.startToEnd) {
-                    return await _confirmDelete(context, palletModel, pallet);
-                  } else if (direction == DismissDirection.endToStart) {
-                    return await _confirmMarkSold(context, palletModel, pallet);
-                  }
-                  return false;
+                    )),
+                    child: child,
+                  );
                 },
-                child: Card(
-                  margin: EdgeInsets.symmetric(
-                    vertical: ResponsiveUtils.getPadding(context, PaddingType.tiny).top,
-                    horizontal: ResponsiveUtils.getPadding(context, PaddingType.small).left
-                  ),
-                  child: InkWell(
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => PalletDetailScreen(pallet: pallet),
-                      ),
-                    ),
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: ResponsiveUtils.getPadding(context, PaddingType.small).left,
-                        vertical: isNarrowScreen 
-                          ? ResponsiveUtils.getPadding(context, PaddingType.small).top
-                          : ResponsiveUtils.getPadding(context, PaddingType.medium).top
-                      ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          // Avatar - smaller on narrow screens
-                          CircleAvatar(
-                            backgroundColor: Colors.brown.shade300,
-                            radius: isNarrowScreen 
-                              ? ResponsiveUtils.getIconSize(context, IconSizeType.small)
-                              : ResponsiveUtils.getIconSize(context, IconSizeType.medium),
-                            child: Text(
-                              pallet.name.isNotEmpty
-                                  ? pallet.name[0].toUpperCase()
-                                  : "P",
-                              style: context.mediumTextColor(Colors.white),
-                            ),
-                          ),
-                          SizedBox(width: ResponsiveUtils.getPadding(context, PaddingType.small).left),
-
-                          // Main content
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                // Pallet name
-                                Text(
-                                  pallet.name,
-                                  style: isNarrowScreen 
-                                    ? context.smallTextWeight(FontWeight.bold)
-                                    : context.mediumTextWeight(FontWeight.bold),
-                                  overflow: TextOverflow.ellipsis,
-                                  maxLines: 1,
-                                ),
-
-                                SizedBox(height: ResponsiveUtils.getPadding(context, PaddingType.tiny).top),
-
-                                // Tag and metadata in a row
-                                Row(
-                                  children: [
-                                    // Tag with icon
-                                    Icon(
-                                      Icons.sell_outlined,
-                                      size: ResponsiveUtils.getIconSize(context, IconSizeType.tiny),
-                                      color: Colors.brown.shade700
-                                    ),
-                                    SizedBox(width: 2),
-                                    Flexible(
-                                      flex: 3,
-                                      child: Text(
-                                        pallet.tag.isEmpty
-                                            ? "No tag"
-                                            : pallet.tag,
-                                        style: context.tinyTextColor(Colors.brown.shade700),
-                                        overflow: TextOverflow.ellipsis,
-                                        maxLines: 1,
-                                      ),
-                                    ),
-
-                                    // Cost
-                                    SizedBox(width: 6),
-                                    Text("•", style: context.tinyTextColor(Colors.grey)),
-                                    SizedBox(width: 6),
-                                    Icon(
-                                      Icons.attach_money,
-                                      size: ResponsiveUtils.getIconSize(context, IconSizeType.tiny),
-                                      color: Colors.green.shade700
-                                    ),
-                                    Flexible(
-                                      flex: 2,
-                                      child: Text(
-                                        pallet.totalCost.toStringAsFixed(2),
-                                        style: context.tinyTextColor(Colors.green.shade700),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-
-                                    // Items count
-                                    SizedBox(width: 6),
-                                    Text("•", style: context.tinyTextColor(Colors.grey)),
-                                    SizedBox(width: 6),
-                                    Icon(
-                                      Icons.shopping_basket_outlined,
-                                      size: ResponsiveUtils.getIconSize(context, IconSizeType.tiny),
-                                      color: Colors.blueGrey
-                                    ),
-                                    Text(
-                                      "${pallet.items.length}",
-                                      style: context.tinyTextColor(Colors.blueGrey),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-
-                          // Action buttons - more compact for narrow screens
-                          if (!pallet.isClosed) ...[
-                            _CompactActionButton(
-                              icon: Icons.edit,
-                              tooltip: "Edit Name",
-                              onPressed: () => _showEditPalletNameDialog(
-                                  context, palletModel, pallet),
-                              isNarrowScreen: isNarrowScreen,
-                            ),
-                            _CompactActionButton(
-                              icon: Icons.sell,
-                              tooltip: "Edit Tag",
-                              onPressed: () => _showEditTagDialog(
-                                  context, palletModel, pallet),
-                              isNarrowScreen: isNarrowScreen,
-                            ),
-                          ] else
-                            Container(
-                              padding: EdgeInsets.symmetric(
-                                horizontal: 6,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.grey,
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Text(
-                                'CLOSED',
-                                style: context.tinyTextWeight(FontWeight.bold).copyWith(
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
               );
             },
           ),
@@ -404,49 +235,243 @@ class _InventoryScreenState extends State<InventoryScreen> {
     );
   }
 
-  Widget _buildTabletPalletCard(
-    BuildContext context, 
-    Pallet pallet, 
-    PalletModel palletModel
-  ) {
+  // Helper method to build phone pallet card
+  Widget _buildPhonePalletCard(BuildContext context, Pallet pallet, PalletModel model) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+      child: Card(
+        elevation: 1,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Dismissible(
+          key: ValueKey('pallet-${pallet.id}'),
+          background: Container(
+            decoration: BoxDecoration(
+              color: Colors.red,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            alignment: Alignment.centerLeft,
+            padding: const EdgeInsets.only(left: 20.0),
+            child: const Icon(Icons.delete, color: Colors.white),
+          ),
+          secondaryBackground: Container(
+            decoration: BoxDecoration(
+              color: Colors.green,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            alignment: Alignment.centerRight,
+            padding: const EdgeInsets.only(right: 20.0),
+            child: const Icon(Icons.check, color: Colors.white),
+          ),
+          confirmDismiss: (direction) async {
+            if (direction == DismissDirection.startToEnd) {
+              return await _confirmDeletePallet(context, model, pallet);
+            } else {
+              model.markPalletAsSold(pallet.id);
+              return false; // Don't dismiss, just mark as sold
+            }
+          },
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => PalletDetailScreen(pallet: pallet),
+              ),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      CircleAvatar(
+                        backgroundColor: pallet.isClosed 
+                            ? Colors.green.shade100 
+                            : Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                        child: Icon(
+                          pallet.isClosed ? Icons.check_circle : Icons.inventory,
+                          color: pallet.isClosed 
+                              ? Colors.green 
+                              : Theme.of(context).colorScheme.primary,
+                          size: ResponsiveUtils.getIconSize(context, IconSizeType.medium),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              pallet.name,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              "Date: ${_formatDate(pallet.date)}",
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            "\$${pallet.profit.toStringAsFixed(2)}",
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: pallet.profit >= 0
+                                  ? Theme.of(context).colorScheme.primary
+                                  : Theme.of(context).colorScheme.error,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            pallet.isClosed ? "Closed" : "Open",
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: pallet.isClosed ? Colors.green : Colors.orangeAccent,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Divider(height: 1),
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      _buildInfoChip(
+                        context, 
+                        "${pallet.items.length} items", 
+                        Icons.inventory_2_outlined
+                      ),
+                      _buildInfoChip(
+                        context, 
+                        "${pallet.soldItemsCount} sold", 
+                        Icons.check_circle_outline
+                      ),
+                      _buildInfoChip(
+                        context, 
+                        pallet.tag.isEmpty ? "No tag" : pallet.tag, 
+                        Icons.label_outline
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+  
+  Widget _buildInfoChip(BuildContext context, String label, IconData icon) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Theme.of(context).dividerColor),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 14,
+            color: Theme.of(context).colorScheme.primary,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Helper method to format date
+  String _formatDate(DateTime date) {
+    return "${date.month}/${date.day}/${date.year}";
+  }
+
+  // Helper method to build tablet pallet card
+  Widget _buildTabletPalletCard(BuildContext context, Pallet pallet, PalletModel model) {
     return Card(
+      elevation: 1,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
       child: InkWell(
+        borderRadius: BorderRadius.circular(16),
         onTap: () => Navigator.push(
           context,
           MaterialPageRoute(
             builder: (context) => PalletDetailScreen(pallet: pallet),
           ),
         ),
+        onLongPress: () => _confirmDeletePallet(context, model, pallet),
         child: Padding(
-          padding: ResponsiveUtils.getPadding(context, PaddingType.medium),
+          padding: const EdgeInsets.all(16.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   CircleAvatar(
-                    backgroundColor: Colors.brown.shade300,
-                    radius: ResponsiveUtils.getIconSize(context, IconSizeType.medium),
-                    child: Text(
-                      pallet.name.isNotEmpty
-                          ? pallet.name[0].toUpperCase()
-                          : "P",
-                      style: context.largeTextColor(Colors.white),
+                    backgroundColor: pallet.isClosed 
+                        ? Colors.green.shade100 
+                        : Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                    child: Icon(
+                      pallet.isClosed ? Icons.check_circle : Icons.inventory,
+                      color: pallet.isClosed 
+                          ? Colors.green 
+                          : Theme.of(context).colorScheme.primary,
                     ),
                   ),
-                  SizedBox(width: ResponsiveUtils.getPadding(context, PaddingType.small).left),
+                  const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           pallet.name,
-                          style: context.largeTextWeight(FontWeight.bold),
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
+                        const SizedBox(height: 4),
                         Text(
-                          pallet.tag.isEmpty ? "No tag" : pallet.tag,
-                          style: context.smallTextColor(Colors.brown.shade700),
+                          "Date: ${_formatDate(pallet.date)}",
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey[600],
+                          ),
                         ),
                       ],
                     ),
@@ -454,92 +479,58 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      if (pallet.isClosed)
-                        Container(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.grey,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            'CLOSED',
-                            style: context.tinyTextWeight(FontWeight.bold).copyWith(
-                              color: Colors.white,
-                            ),
-                          ),
-                        )
-                      else
-                        Container(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.green,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            'ACTIVE',
-                            style: context.tinyTextWeight(FontWeight.bold).copyWith(
-                              color: Colors.white,
-                            ),
+                      Text(
+                        "\$${pallet.profit.toStringAsFixed(2)}",
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: pallet.profit >= 0
+                              ? Theme.of(context).colorScheme.primary
+                              : Theme.of(context).colorScheme.error,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: pallet.isClosed 
+                              ? Colors.green.withOpacity(0.1) 
+                              : Colors.orange.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          pallet.isClosed ? "Closed" : "Open",
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: pallet.isClosed ? Colors.green : Colors.orange,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
-                      SizedBox(height: ResponsiveUtils.getPadding(context, PaddingType.tiny).top),
-                      Text(
-                        '\$${pallet.totalCost.toStringAsFixed(2)}',
-                        style: context.mediumTextColor(Colors.green.shade700),
                       ),
                     ],
                   ),
                 ],
               ),
-              Spacer(),
+              const Spacer(),
+              Divider(height: 16),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  // Item count
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.shopping_basket_outlined,
-                        size: ResponsiveUtils.getIconSize(context, IconSizeType.small),
-                        color: Colors.blueGrey
-                      ),
-                      SizedBox(width: 4),
-                      Text(
-                        "${pallet.items.length} items",
-                        style: context.smallTextColor(Colors.blueGrey),
-                      ),
-                      Text(
-                        " (${pallet.soldItemsCount} sold)",
-                        style: context.smallTextColor(Colors.blueGrey),
-                      ),
-                    ],
+                  _buildInfoChip(
+                    context, 
+                    "${pallet.items.length} items", 
+                    Icons.inventory_2_outlined
                   ),
-                  
-                  // Action buttons for tablets
-                  if (!pallet.isClosed)
-                    Row(
-                      children: [
-                        _TabletActionButton(
-                          icon: Icons.edit,
-                          label: "Edit",
-                          onPressed: () => _showEditPalletNameDialog(
-                            context, palletModel, pallet),
-                        ),
-                        SizedBox(width: ResponsiveUtils.getPadding(context, PaddingType.small).left),
-                        _TabletActionButton(
-                          icon: Icons.sell,
-                          label: "Sell",
-                          onPressed: () => _confirmMarkSold(
-                            context, palletModel, pallet),
-                        ),
-                      ],
-                    ),
+                  _buildInfoChip(
+                    context, 
+                    "${pallet.soldItemsCount} sold", 
+                    Icons.check_circle_outline
+                  ),
+                  _buildInfoChip(
+                    context, 
+                    pallet.tag.isEmpty ? "No tag" : pallet.tag, 
+                    Icons.label_outline
+                  ),
                 ],
               ),
             ],
@@ -650,40 +641,100 @@ class _InventoryScreenState extends State<InventoryScreen> {
     );
   }
 
-  Future<bool?> _confirmDelete(
-      BuildContext context, PalletModel palletModel, Pallet pallet) async {
+  Future<bool?> _confirmDeletePallet(
+      BuildContext context, PalletModel palletModel, Pallet pallet) {
     return showDialog<bool>(
       context: context,
       builder: (context) {
+        final hasItems = pallet.items.isNotEmpty;
+        
         return AlertDialog(
-          title: Text("Delete Pallet", style: context.largeTextWeight(FontWeight.bold)),
-          content: RichText(
-            text: TextSpan(
-              style: context.mediumText,
-              children: [
-                TextSpan(text: "Are you sure you want to delete "),
-                TextSpan(
-                  text: pallet.name,
-                  style: context.mediumTextWeight(FontWeight.bold),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
+          title: Row(
+            children: [
+              Icon(
+                Icons.delete,
+                color: Theme.of(context).colorScheme.error,
+                size: 28,
+              ),
+              SizedBox(width: 12),
+              Text(
+                "Delete Pallet",
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 20,
                 ),
-                TextSpan(text: "?"),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "Are you sure you want to delete '${pallet.name}'?",
+                style: TextStyle(
+                  fontSize: 16,
+                ),
+              ),
+              if (hasItems) ...[
+                SizedBox(height: 16),
+                Container(
+                  padding: EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.error.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: Theme.of(context).colorScheme.error.withOpacity(0.3),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.warning_amber_rounded,
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          "This pallet contains ${pallet.items.length} item${pallet.items.length != 1 ? 's' : ''}. All items will be deleted.",
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ],
-            ),
+            ],
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: Text("CANCEL", style: context.mediumText),
+              child: Text("CANCEL"),
+              style: TextButton.styleFrom(
+                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              ),
             ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            ElevatedButton.icon(
+              icon: Icon(Icons.delete),
+              label: Text("DELETE"),
               onPressed: () {
                 palletModel.removePallet(pallet.id);
                 Navigator.pop(context, true);
               },
-              child: Text("DELETE", style: context.mediumText),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.error,
+                foregroundColor: Colors.white,
+                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              ),
             ),
           ],
+          actionsPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         );
       },
     );

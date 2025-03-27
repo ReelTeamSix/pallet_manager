@@ -1,0 +1,113 @@
+-- Create profiles table (without direct reference to auth.users)
+CREATE TABLE profiles (
+    id UUID PRIMARY KEY,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    email TEXT,
+    name TEXT
+);
+
+-- Create pallets table
+CREATE TABLE pallets (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    name TEXT NOT NULL,
+    tag TEXT,
+    date TIMESTAMP WITH TIME ZONE NOT NULL,
+    total_cost NUMERIC NOT NULL,
+    is_closed BOOLEAN DEFAULT FALSE,
+    user_id UUID REFERENCES profiles(id),
+    original_id INTEGER
+);
+
+-- Create pallet_items table
+CREATE TABLE pallet_items (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    name TEXT NOT NULL,
+    sale_price NUMERIC DEFAULT 0,
+    is_sold BOOLEAN DEFAULT FALSE,
+    sale_date TIMESTAMP WITH TIME ZONE,
+    allocated_cost NUMERIC DEFAULT 0,
+    retail_price NUMERIC,
+    condition TEXT,
+    list_price NUMERIC,
+    product_code TEXT,
+    pallet_id UUID REFERENCES pallets(id),
+    user_id UUID REFERENCES profiles(id),
+    original_id INTEGER
+);
+
+-- Create item_photos table
+CREATE TABLE item_photos (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    url TEXT NOT NULL,
+    item_id UUID REFERENCES pallet_items(id),
+    user_id UUID REFERENCES profiles(id)
+);
+
+-- Create tags table
+CREATE TABLE tags (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    name TEXT NOT NULL,
+    user_id UUID REFERENCES profiles(id)
+);
+
+-- Enable Row Level Security on all tables
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE pallets ENABLE ROW LEVEL SECURITY;
+ALTER TABLE pallet_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE item_photos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tags ENABLE ROW LEVEL SECURITY;
+
+-- Create RLS policies for profiles
+CREATE POLICY "Users can view their own profile" ON profiles 
+    FOR SELECT USING (auth.uid() = id);
+CREATE POLICY "Users can update their own profile" ON profiles 
+    FOR UPDATE USING (auth.uid() = id);
+
+-- Create RLS policies for pallets
+CREATE POLICY "Users can view their own pallets" ON pallets 
+    FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert their own pallets" ON pallets 
+    FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update their own pallets" ON pallets 
+    FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Users can delete their own pallets" ON pallets 
+    FOR DELETE USING (auth.uid() = user_id);
+
+-- Create RLS policies for pallet_items
+CREATE POLICY "Users can view their own pallet items" ON pallet_items 
+    FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert their own pallet items" ON pallet_items 
+    FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update their own pallet items" ON pallet_items 
+    FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Users can delete their own pallet items" ON pallet_items 
+    FOR DELETE USING (auth.uid() = user_id);
+
+-- Create RLS policies for item_photos
+CREATE POLICY "Users can view their own item photos" ON item_photos 
+    FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert their own item photos" ON item_photos 
+    FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update their own item photos" ON item_photos 
+    FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Users can delete their own item photos" ON item_photos 
+    FOR DELETE USING (auth.uid() = user_id);
+
+-- Create RLS policies for tags
+CREATE POLICY "Users can view their own tags" ON tags 
+    FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert their own tags" ON tags 
+    FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update their own tags" ON tags 
+    FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Users can delete their own tags" ON tags 
+    FOR DELETE USING (auth.uid() = user_id);
+
+-- Create policy for service role (admin) access
+-- Example for pallets:
+CREATE POLICY "Service role has full access to pallets" ON pallets
+    FOR ALL USING (auth.jwt() ->> 'role' = 'service_role');

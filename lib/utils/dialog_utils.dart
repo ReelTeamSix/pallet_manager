@@ -18,7 +18,38 @@ class DialogUtils {
     final nameController = TextEditingController(text: "Pallet $nextId");
     final tagController = TextEditingController();
     final costController = TextEditingController();
+    final dateController = TextEditingController(
+      text: "${DateTime.now().month}/${DateTime.now().day}/${DateTime.now().year}"
+    );
     final formKey = GlobalKey<FormState>();
+    DateTime selectedDate = DateTime.now();
+
+    // Function to show date picker
+    Future<void> selectDate() async {
+      final DateTime? picked = await showDatePicker(
+        context: context,
+        initialDate: selectedDate,
+        firstDate: DateTime(2000),
+        lastDate: DateTime(2101),
+        builder: (context, child) {
+          return Theme(
+            data: Theme.of(context).copyWith(
+              colorScheme: ColorScheme.light(
+                primary: Theme.of(context).colorScheme.primary,
+                onPrimary: Colors.white,
+                onSurface: Colors.black,
+              ),
+            ),
+            child: child!,
+          );
+        },
+      );
+      
+      if (picked != null && picked != selectedDate) {
+        selectedDate = picked;
+        dateController.text = "${picked.month}/${picked.day}/${picked.year}";
+      }
+    }
 
     // Function to show tag selection in a bottom sheet
     void showTagSelector() {
@@ -26,58 +57,138 @@ class DialogUtils {
         context: context,
         isScrollControlled: true,
         shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
         builder: (context) {
           // Directly access the model inside the builder for freshest data
           final tagsToShow =
               Provider.of<PalletModel>(context).savedTags.toList();
+          
+          if (tagsToShow.isEmpty) {
+            return Container(
+              padding: EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.label_off,
+                    size: 48,
+                    color: Colors.grey[400],
+                  ),
+                  SizedBox(height: 16),
+                  Text(
+                    "No tags created yet",
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    "Create a new tag for your pallet",
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                  SizedBox(height: 24),
+                  ElevatedButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: Text("Close"),
+                    style: ElevatedButton.styleFrom(
+                      minimumSize: Size(double.infinity, 50),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
 
           return Container(
-            padding: EdgeInsets.all(16),
+            padding: EdgeInsets.symmetric(horizontal: 24, vertical: 24),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  "Select a Tag",
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      "Select a Tag",
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.close),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
                 ),
                 SizedBox(height: 16),
-
-                // Show tags or a message if empty
-                tagsToShow.isEmpty
-                    ? Padding(
-                        padding: EdgeInsets.symmetric(vertical: 20),
-                        child: Text("No tags available"),
-                      )
-                    : Container(
-                        height: 200, // Fixed height container
-                        child: ListView.builder(
-                          itemCount: tagsToShow.length,
-                          itemBuilder: (context, index) {
-                            return ListTile(
-                              leading: Icon(Icons.label),
-                              title: Text(tagsToShow[index]),
-                              onTap: () {
-                                tagController.text = tagsToShow[index];
-                                Navigator.pop(context);
-                              },
-                            );
+                // Show a chips layout for better UX
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: tagsToShow.map((tag) {
+                    return AnimatedBuilder(
+                      animation: tagController,
+                      builder: (context, _) {
+                        final isSelected = tagController.text == tag;
+                        return InkWell(
+                          onTap: () {
+                            tagController.text = tag;
+                            Navigator.pop(context);
                           },
-                        ),
-                      ),
-
-                SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: context.primaryColor,
-                      padding: EdgeInsets.symmetric(vertical: 12),
+                          borderRadius: BorderRadius.circular(20),
+                          child: Container(
+                            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: isSelected 
+                                  ? Theme.of(context).colorScheme.primary
+                                  : Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.label,
+                                  size: 16,
+                                  color: isSelected
+                                      ? Colors.white
+                                      : Theme.of(context).colorScheme.primary,
+                                ),
+                                SizedBox(width: 8),
+                                Text(
+                                  tag,
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                    color: isSelected
+                                        ? Colors.white
+                                        : Theme.of(context).colorScheme.onSurface,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    );
+                  }).toList(),
+                ),
+                SizedBox(height: 24),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text("Done"),
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: Size(double.infinity, 50),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                    onPressed: () => Navigator.pop(context),
-                    child: Text("CLOSE", style: TextStyle(color: Colors.white)),
                   ),
                 ),
               ],
@@ -87,13 +198,12 @@ class DialogUtils {
       );
     }
 
-    // Function to handle form submission
-    void submitForm() {
+    void handleSubmit() {
       if (formKey.currentState!.validate()) {
-        final name = nameController.text;
+        final name = nameController.text.trim();
         final tag = tagController.text.trim();
-        final cost = double.tryParse(costController.text) ?? 0.0;
-
+        final cost = double.parse(costController.text);
+        
         Provider.of<PalletModel>(context, listen: false).addPallet(
           Pallet(
             id: Provider.of<PalletModel>(context, listen: false)
@@ -101,7 +211,7 @@ class DialogUtils {
             name: name,
             tag: tag,
             totalCost: cost,
-            date: DateTime.now(),
+            date: selectedDate,
           ),
         );
         Navigator.pop(context);
@@ -112,115 +222,109 @@ class DialogUtils {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text("Add New Pallet",
-            style: context.largeTextWeight(FontWeight.bold)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+        ),
+        title: Row(
+          children: [
+            Icon(
+              Icons.add_box,
+              color: Theme.of(context).colorScheme.primary,
+              size: 28,
+            ),
+            SizedBox(width: 12),
+            Text(
+              "Add New Pallet",
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 20,
+              ),
+            ),
+          ],
+        ),
         content: KeyboardAware(
           child: SingleChildScrollView(
             child: Form(
               key: formKey,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  // Name field
                   TextFormField(
                     controller: nameController,
                     decoration: InputDecoration(
                       labelText: "Pallet Name",
-                      border: OutlineInputBorder(),
-                      contentPadding: ResponsiveUtils.getPaddingHV(
-                          context, PaddingType.small, PaddingType.small),
-                      prefixIcon: Icon(
-                        Icons.inventory_2_outlined,
-                        size: ResponsiveUtils.getIconSize(
-                            context, IconSizeType.medium),
+                      prefixIcon: Icon(Icons.inventory),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
                       ),
                     ),
                     validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return "Enter pallet name";
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Please enter a name';
                       }
-                      if (palletModel.palletNameExists(value)) {
-                        return "A pallet with this name already exists";
+                      if (palletModel.palletNameExists(value.trim())) {
+                        return 'This name already exists';
                       }
                       return null;
                     },
-                    style: context.mediumText,
-                    autofocus: true,
-                    textInputAction: TextInputAction.next,
                   ),
-                  SizedBox(
-                      height: ResponsiveUtils.getPadding(
-                              context, PaddingType.medium)
-                          .top),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextFormField(
-                          controller: tagController,
-                          decoration: InputDecoration(
-                            labelText: "Tag",
-                            border: OutlineInputBorder(),
-                            contentPadding: ResponsiveUtils.getPaddingHV(
-                                context, PaddingType.small, PaddingType.small),
-                            prefixIcon: Icon(
-                              Icons.sell_outlined,
-                              size: ResponsiveUtils.getIconSize(
-                                  context, IconSizeType.medium),
-                            ),
-                          ),
-                          style: context.mediumText,
-                          readOnly: false, // Allow direct editing too
-                        ),
+                  SizedBox(height: 16),
+                  
+                  // Tag field
+                  TextFormField(
+                    controller: tagController,
+                    decoration: InputDecoration(
+                      labelText: "Tag (Optional)",
+                      prefixIcon: Icon(Icons.label),
+                      suffixIcon: IconButton(
+                        icon: Icon(Icons.arrow_drop_down),
+                        onPressed: showTagSelector,
+                        tooltip: "Select from existing tags",
                       ),
-                      if (palletModel.savedTags.isNotEmpty)
-                        IconButton(
-                          icon: Icon(
-                            Icons.list,
-                            size: ResponsiveUtils.getIconSize(
-                                context, IconSizeType.medium),
-                          ),
-                          padding: EdgeInsets.zero,
-                          constraints: BoxConstraints(
-                            minWidth: ResponsiveUtils.getIconSize(
-                                    context, IconSizeType.medium) +
-                                12,
-                            minHeight: ResponsiveUtils.getIconSize(
-                                    context, IconSizeType.medium) +
-                                12,
-                          ),
-                          tooltip: "Select saved tag",
-                          onPressed: showTagSelector,
-                        ),
-                    ],
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
                   ),
-                  SizedBox(
-                      height: ResponsiveUtils.getPadding(
-                              context, PaddingType.medium)
-                          .top),
+                  SizedBox(height: 16),
+                  
+                  // Date field
+                  TextFormField(
+                    controller: dateController,
+                    readOnly: true,
+                    decoration: InputDecoration(
+                      labelText: "Date",
+                      prefixIcon: Icon(Icons.calendar_today),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    onTap: selectDate,
+                  ),
+                  SizedBox(height: 16),
+                  
+                  // Cost field
                   TextFormField(
                     controller: costController,
+                    keyboardType: TextInputType.numberWithOptions(decimal: true),
                     decoration: InputDecoration(
                       labelText: "Total Cost",
-                      prefixIcon: Icon(
-                        Icons.attach_money,
-                        size: ResponsiveUtils.getIconSize(
-                            context, IconSizeType.medium),
+                      prefixIcon: Icon(Icons.attach_money),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      border: OutlineInputBorder(),
-                      contentPadding: ResponsiveUtils.getPaddingHV(
-                          context, PaddingType.small, PaddingType.small),
                     ),
-                    keyboardType: TextInputType.number,
                     validator: (value) {
                       if (value == null || value.isEmpty) {
-                        return "Enter cost";
+                        return 'Please enter the cost';
                       }
                       if (double.tryParse(value) == null) {
-                        return "Enter a valid number";
+                        return 'Please enter a valid number';
                       }
                       return null;
                     },
-                    style: context.mediumText,
-                    onEditingComplete: submitForm, // Submit on keyboard done
                   ),
                 ],
               ),
@@ -230,21 +334,21 @@ class DialogUtils {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text("CANCEL", style: context.mediumText),
+            child: Text("CANCEL"),
             style: TextButton.styleFrom(
-              minimumSize: Size(60, 36),
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             ),
           ),
-          SizedBox(width: 8),
-          ElevatedButton(
-            onPressed: submitForm,
-            child: Text("ADD", style: context.mediumText),
+          ElevatedButton.icon(
+            icon: Icon(Icons.save),
+            label: Text("SAVE"),
+            onPressed: handleSubmit,
             style: ElevatedButton.styleFrom(
-              backgroundColor: context.primaryColor,
-              minimumSize: Size(60, 36),
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             ),
           ),
         ],
+        actionsPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       ),
     );
   }
