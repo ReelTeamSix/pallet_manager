@@ -695,4 +695,43 @@ class SupabaseService {
       return []; // Return empty list on error
     }
   }
+
+  // Create a tag
+  Future<Map<String, dynamic>> addTag(String tag) async {
+    try {
+      if (currentUser == null) {
+        LogUtils.warning('Cannot add tag: User not authenticated');
+        throw Exception('User must be authenticated to add tag');
+      }
+      
+      // Check if tag already exists to avoid duplicates
+      final existing = await client
+        .from('tags')
+        .select()
+        .eq('name', tag)
+        .eq('user_id', currentUser!.id)
+        .maybeSingle();
+        
+      if (existing != null) {
+        LogUtils.info('Tag already exists, skipping creation: $tag');
+        return existing;
+      }
+      
+      // Create the tag
+      final response = await client
+        .from('tags')
+        .insert({
+          'name': tag,
+          'user_id': currentUser!.id,
+        })
+        .select()
+        .single();
+        
+      LogUtils.info('Added tag: $tag with ID: ${response['id']}');
+      return response;
+    } catch (e) {
+      LogUtils.error('Error adding tag', e);
+      rethrow;
+    }
+  }
 } 

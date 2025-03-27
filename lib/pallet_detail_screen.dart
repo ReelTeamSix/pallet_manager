@@ -1,10 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'pallet_model.dart';
-import 'responsive_utils.dart'; // Import responsive utilities
-import 'utils/dialog_utils.dart'; // Import dialog utilities
-import 'item_detail_screen.dart'; // Import item detail screen
+import 'package:pallet_manager/pallet_model.dart';
+import 'package:pallet_manager/services/data_repository.dart';
+import 'package:pallet_manager/item_detail_screen.dart';
+import 'package:pallet_manager/utils/dialog_utils.dart';
+import 'package:pallet_manager/utils/extensions.dart';
+import 'package:pallet_manager/utils/responsive_utils.dart';
+import 'package:pallet_manager/widgets/keyboard_aware.dart';
 import 'package:pallet_manager/utils/log_utils.dart';
+import 'package:pallet_manager/theme/theme_extensions.dart';
+
+// Import the necessary types from responsive_utils.dart
+// These should be properly accessible from the responsive_utils.dart file
+// If these are missing, you need to add them there
+// Or import them directly from where they are defined
+import 'package:pallet_manager/utils/responsive_utils.dart' show ResponsiveUtils, IconSizeType, PaddingType, FontSizeType;
+import 'package:pallet_manager/theme/theme_extensions.dart';
 
 class PalletDetailScreen extends StatefulWidget {
   final Pallet pallet;
@@ -23,31 +34,14 @@ class _PalletDetailScreenState extends State<PalletDetailScreen> {
   @override
   void initState() {
     super.initState();
-    _loadPalletItemsIfNeeded();
+    _loadPalletItems();
   }
 
-  Future<void> _loadPalletItemsIfNeeded() async {
+  void _loadPalletItems() {
     final palletModel = Provider.of<PalletModel>(context, listen: false);
-    
     if (palletModel.dataSource == DataSource.supabase) {
-      setState(() {
-        _isLoadingItems = true;
-      });
-      
-      try {
-        LogUtils.info('Loading items for pallet ${widget.pallet.id}');
-        // Load items for this specific pallet
-        await palletModel.loadPalletItems(widget.pallet.id);
-        LogUtils.info('Successfully loaded items for pallet ${widget.pallet.id}');
-      } catch (e) {
-        LogUtils.error('Error loading pallet items', e);
-      } finally {
-        if (mounted) {
-          setState(() {
-            _isLoadingItems = false;
-          });
-        }
-      }
+      // If using Supabase, we need to ensure items are loaded
+      palletModel.loadPalletItems(widget.pallet.id);
     }
   }
 
@@ -139,15 +133,6 @@ class _PalletDetailScreenState extends State<PalletDetailScreen> {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Left panel with pallet info
-        Expanded(
-          flex: 3,
-          child: SingleChildScrollView(
-            padding: ResponsiveUtils.getPadding(context, PaddingType.medium),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildPalletInfoCard(pallet, false),
         // Left side - Pallet info and actions
         SizedBox(
           width: 320, // Fixed sidebar width
@@ -678,43 +663,7 @@ class _PalletDetailScreenState extends State<PalletDetailScreen> {
     }
     
     if (pallet.items.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.inventory_2_outlined,
-              size: ResponsiveUtils.getIconSize(context, IconSizeType.large),
-              color: Colors.grey,
-            ),
-            SizedBox(height: 16),
-            Text(
-              'No items in this pallet',
-              style: context.mediumText.copyWith(color: Colors.grey),
-            ),
-            SizedBox(height: 16),
-            ElevatedButton.icon(
-              onPressed: () {
-            Icon(Icons.inventory_2_outlined,
-                size: ResponsiveUtils.getIconSize(context, IconSizeType.xLarge),
-                color: Colors.grey),
-            SizedBox(
-                height: ResponsiveUtils.getPadding(context, PaddingType.medium)
-                    .top),
-            Text(
-              "No items added yet",
-              style: context.mediumTextColor(Colors.grey),
-            ),
-            SizedBox(
-                height:
-                    ResponsiveUtils.getPadding(context, PaddingType.tiny).top),
-            Text(
-              "Tap 'Add Item' to get started",
-              style: context.smallTextColor(Colors.grey),
-            ),
-          ],
-        ),
-      );
+      return _buildEmptyState(context, isNarrowScreen);
     }
 
     return ListView.builder(
@@ -918,7 +867,7 @@ class _PalletDetailScreenState extends State<PalletDetailScreen> {
               onPressed: () {
                 Navigator.pop(context, true);
               },
-              child: Text("DELETE", style: context.mediumText),
+              child: Text("DELETE", style: context.mediumTextColor(Colors.white)),
             ),
           ],
         );
@@ -1125,6 +1074,41 @@ class _PalletDetailScreenState extends State<PalletDetailScreen> {
           ],
         );
       },
+    );
+  }
+
+  Widget _buildEmptyState(BuildContext context, bool isNarrowScreen) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.inventory_2_outlined,
+              size: ResponsiveUtils.getIconSize(context, IconSizeType.xLarge),
+              color: Colors.grey),
+          SizedBox(
+              height: ResponsiveUtils.getPadding(context, PaddingType.medium)
+                  .top),
+          Text(
+            "No items added yet",
+            style: context.mediumTextColor(Colors.grey),
+          ),
+          SizedBox(
+              height:
+                  ResponsiveUtils.getPadding(context, PaddingType.tiny).top),
+          Text(
+            "Tap 'Add Item' to get started",
+            style: context.smallTextColor(Colors.grey),
+          ),
+          SizedBox(height: 16),
+          ElevatedButton.icon(
+            onPressed: () {
+              _showAddItemDialog(context, widget.pallet);
+            },
+            icon: Icon(Icons.add),
+            label: Text("Add First Item"),
+          ),
+        ],
+      ),
     );
   }
 }

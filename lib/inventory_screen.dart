@@ -6,6 +6,7 @@ import 'pallet_detail_screen.dart';
 import 'responsive_utils.dart'; // Import responsive utilities
 import 'utils/dialog_utils.dart'; // Import dialog utilities
 import 'theme/theme_extensions.dart';
+import 'utils/log_utils.dart';
 
 class InventoryScreen extends StatefulWidget {
   const InventoryScreen({super.key});
@@ -15,6 +16,36 @@ class InventoryScreen extends StatefulWidget {
 }
 
 class _InventoryScreenState extends State<InventoryScreen> {
+  bool _isLoading = true;
+  String? _currentTag;
+  bool _isTablet = false;
+  
+  @override
+  void initState() {
+    super.initState();
+    _currentTag = null;
+    _loadData();
+  }
+  
+  Future<void> _refreshData() async {
+    if (_isLoading) return;
+    setState(() {
+      _isLoading = true;
+    });
+    
+    try {
+      await Provider.of<PalletModel>(context, listen: false).forceDataReload();
+    } catch (e) {
+      LogUtils.error('Error refreshing inventory data', e);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+    return;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -85,35 +116,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
           }
 
           if (palletModel.pallets.isEmpty) {
-            return Column(
-              children: [
-                if (filterIndicator != null) filterIndicator,
-                Expanded(
-                  child: Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.inventory_2_outlined,
-                          size: ResponsiveUtils.getIconSize(context, IconSizeType.xLarge),
-                          color: Colors.grey
-                        ),
-                        SizedBox(height: ResponsiveUtils.getPadding(context, PaddingType.small).top),
-                        Text(
-                          "No pallets yet",
-                          style: context.mediumTextColor(Colors.grey),
-                        ),
-                        SizedBox(height: ResponsiveUtils.getPadding(context, PaddingType.tiny).top),
-                        Text(
-                          "Tap + to add a new pallet",
-                          style: context.smallTextColor(Colors.grey),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            );
+            return _buildEmptyState(context);
           }
 
           // Use different layouts for tablet vs phone
@@ -643,7 +646,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
   }
 
   Future<bool?> _confirmDeletePallet(
-      BuildContext context, PalletModel palletModel, Pallet pallet) {
+      BuildContext context, PalletModel palletModel, Pallet pallet) async {
     return showDialog<bool>(
       context: context,
       builder: (context) {
@@ -842,6 +845,64 @@ class _InventoryScreenState extends State<InventoryScreen> {
         );
       },
     );
+  }
+
+  Widget _buildEmptyState(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.inventory_2_outlined,
+            size: ResponsiveUtils.getIconSize(context, IconSizeType.xxLarge),
+            color: Colors.grey.shade400,
+          ),
+          SizedBox(height: 20),
+          Text(
+            "No pallets found",
+            style: context.largeTextColor(Colors.grey.shade700),
+          ),
+          SizedBox(height: 12),
+          Text(
+            "Start by adding your first pallet",
+            style: context.mediumTextColor(Colors.grey.shade600),
+          ),
+          SizedBox(height: 24),
+          ElevatedButton.icon(
+            onPressed: () => _showAddPalletDialog(context),
+            icon: Icon(Icons.add),
+            label: Text("Add Pallet"),
+            style: ElevatedButton.styleFrom(
+              padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Load data from model
+  Future<void> _loadData() async {
+    setState(() {
+      _isLoading = true;
+    });
+    
+    try {
+      // Configure tablet layout based on screen width
+      final width = MediaQuery.of(context).size.width;
+      _isTablet = width > 600;
+      
+      // Load data from model
+      await Provider.of<PalletModel>(context, listen: false).loadData();
+    } catch (e) {
+      LogUtils.error('Error loading inventory data', e);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 }
 

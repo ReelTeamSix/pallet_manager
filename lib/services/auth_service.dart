@@ -1,94 +1,105 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:log_utils/log_utils.dart';
+import 'package:pallet_manager/services/supabase_service.dart';
+import 'package:pallet_manager/utils/log_utils.dart';
 
 class AuthService {
   static final AuthService _instance = AuthService._internal();
   factory AuthService() => _instance;
   AuthService._internal();
 
-  final _supabase = Supabase.instance.client;
+  final SupabaseClient _supabaseClient = SupabaseService.instance.client;
 
-  User? get currentUser => _supabase.auth.currentUser;
+  bool get isAuthenticated => _supabaseClient.auth.currentUser != null;
+  User? get currentUser => _supabaseClient.auth.currentUser;
 
-  Future<void> ensureUserProfileExists(String userId, String userEmail) async {
+  Future<bool> ensureUserProfileExists() async {
     try {
-      LogUtils.info('AUTH: Checking if profile exists for user $userId');
+      final user = _supabaseClient.auth.currentUser;
+      if (user == null) {
+        LogUtils.warning('Cannot ensure user profile exists: User not authenticated');
+        return false;
+      }
       
-      // Check if profile exists
-      final profile = await _supabase
-          .from('profiles')
-          .select('id')
-          .eq('id', userId)
+      // Check if user profile exists
+      final response = await _supabaseClient
+          .from('user_profiles')
+          .select()
+          .eq('user_id', user.id)
           .maybeSingle();
       
-      if (profile == null) {
-        LogUtils.info('AUTH: Profile not found, creating new profile');
-        await _supabase.from('profiles').insert({
-          'id': userId,
-          'email': userEmail,
-          'name': 'Default Name',
+      if (response == null) {
+        LogUtils.info('Creating new user profile for ${user.email}');
+        
+        // Create a new user profile
+        await _supabaseClient.from('user_profiles').insert({
+          'user_id': user.id,
+          'email': user.email,
           'created_at': DateTime.now().toIso8601String(),
         });
-        LogUtils.info('AUTH: Profile created successfully');
-      } else {
-        LogUtils.info('AUTH: Profile already exists');
+        
+        LogUtils.info('Successfully created user profile');
+        return true;
       }
+      
+      LogUtils.info('User profile already exists');
+      return true;
     } catch (e) {
-      LogUtils.error('AUTH: Error ensuring profile exists: $e');
-      if (e is PostgrestException) {
-        LogUtils.error('AUTH: Postgrest error details - code: ${e.code}, message: ${e.message}, details: ${e.details}, hint: ${e.hint}');
-      }
-      rethrow;
+      LogUtils.error('Error ensuring user profile exists', e);
+      return false;
     }
   }
 
-  Future<void> signInWithEmail(String email, String password) async {
+  Future<AuthResponse> signInWithEmail(String email, String password) async {
     try {
-      LogUtils.info('AUTH: Attempting sign in for $email');
-      final response = await _supabase.auth.signInWithPassword(
+      LogUtils.info('Signing in user with email: $email');
+      final response = await _supabaseClient.auth.signInWithPassword(
         email: email,
         password: password,
       );
       
       if (response.user != null) {
-        LogUtils.info('AUTH: Sign in successful for user ${response.user!.id}');
-        await ensureUserProfileExists(response.user!.id, response.user!.email!);
+        LogUtils.info('Successfully signed in: ${response.user!.email}');
+        await ensureUserProfileExists();
       }
+      
+      return response;
     } catch (e) {
-      LogUtils.error('AUTH: Sign in error: $e');
+      LogUtils.error('Error signing in with email', e);
       rethrow;
     }
   }
 
-  Future<void> signUpWithEmail(String email, String password) async {
+  Future<AuthResponse> signUpWithEmail(String email, String password) async {
     try {
-      LogUtils.info('AUTH: Attempting sign up for $email');
-      final response = await _supabase.auth.signUp(
+      LogUtils.info('Creating new account for email: $email');
+      final response = await _supabaseClient.auth.signUp(
         email: email,
         password: password,
       );
       
       if (response.user != null) {
-        LogUtils.info('AUTH: Sign up successful for user ${response.user!.id}');
-        await ensureUserProfileExists(response.user!.id, response.user!.email!);
+        LogUtils.info('Successfully created account: ${response.user!.email}');
+        await ensureUserProfileExists();
       }
+      
+      return response;
     } catch (e) {
-      LogUtils.error('AUTH: Sign up error: $e');
+      LogUtils.error('Error creating account with email', e);
       rethrow;
     }
   }
 
   Future<void> signOut() async {
     try {
-      LogUtils.info('AUTH: Signing out user ${currentUser?.id}');
-      await _supabase.auth.signOut();
-      LogUtils.info('AUTH: Sign out successful');
+      LogUtils.info('Signing out user');
+      await _supabaseClient.auth.signOut();
+      LogUtils.info('User signed out successfully');
     } catch (e) {
-      LogUtils.error('AUTH: Sign out error: $e');
+      LogUtils.error('Error signing out', e);
       rethrow;
     }
   }
 
-  Stream<AuthState> get authStateChanges => _supabase.auth.onAuthStateChange;
+  Stream<AuthState> get authStateChanges => _supabaseClient.auth.onAuthStateChange;
 } 

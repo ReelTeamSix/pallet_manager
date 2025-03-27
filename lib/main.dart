@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:pallet_manager/services/auth_screen.dart';
+import 'package:pallet_manager/services/auth_service.dart';
 import 'package:pallet_manager/services/data_migration_screen.dart';
 import 'package:pallet_manager/services/data_repository.dart';
 import 'package:pallet_manager/services/supabase_service.dart';
@@ -22,7 +23,8 @@ enum AppState {
   needsMigration,
   ready,
   migrating,
-  error
+  error,
+  migrationNeeded
 }
 
 void main() async {
@@ -71,6 +73,7 @@ class _PalletAppState extends State<PalletApp> {
   late final PalletModel _model;
   late final DataRepository _repository;
   late final AuthService _authService;
+  late final SupabaseClient _supabaseClient;
   
   AppState _appState = AppState.initializing;
   String? _errorMessage;
@@ -78,9 +81,10 @@ class _PalletAppState extends State<PalletApp> {
   @override
   void initState() {
     super.initState();
-    _repository = DataRepository();
-    _model = PalletModel(_repository);
+    _repository = Provider.of<DataRepository>(context, listen: false);
+    _model = Provider.of<PalletModel>(context, listen: false);
     _authService = AuthService();
+    _supabaseClient = SupabaseService.instance.client;
     _initializeApp();
   }
 
@@ -125,7 +129,7 @@ class _PalletAppState extends State<PalletApp> {
       setState(() => _appState = AppState.checkingMigration);
       
       // Ensure user profile exists
-      await _authService.ensureUserProfileExists(user.id, user.email!);
+      await _authService.ensureUserProfileExists();
       
       // Check migration status
       await _checkMigrationStatus();
@@ -153,6 +157,22 @@ class _PalletAppState extends State<PalletApp> {
       setState(() {
         _appState = AppState.error;
         _errorMessage = 'Failed to handle sign out: $e';
+      });
+    }
+  }
+
+  // Handle when user skips authentication
+  Future<void> _handleAuthSkipped() async {
+    try {
+      debugPrint('APP: User skipped authentication');
+      
+      // Check if we need to migrate data
+      await _checkMigrationStatus();
+    } catch (e) {
+      debugPrint('APP: Error handling auth skip: $e');
+      setState(() {
+        _appState = AppState.error;
+        _errorMessage = 'Failed to proceed: $e';
       });
     }
   }
@@ -217,14 +237,16 @@ class _PalletAppState extends State<PalletApp> {
         return _buildLoadingScreen();
       case AppState.needsAuth:
         return AuthScreen(
-          onSignIn: (email, password) => _authService.signInWithEmail(email, password),
-          onSignUp: (email, password) => _authService.signUpWithEmail(email, password),
+          onAuthSuccess: () => _handleUserSignIn(_authService.currentUser),
+          onSkip: () => _handleAuthSkipped(),
         );
       case AppState.checkingMigration:
         return _buildLoadingScreen(message: 'Checking data status...');
       case AppState.needsMigration:
         return DataMigrationScreen(
-          onMigrationComplete: _handleMigrationComplete,
+          palletModel: _model,
+          repository: _repository,
+          onMigrationComplete: () => _handleMigrationComplete(),
         );
       case AppState.ready:
         return HomeScreen();
@@ -232,6 +254,12 @@ class _PalletAppState extends State<PalletApp> {
         return _buildLoadingScreen(message: 'Migrating data...');
       case AppState.error:
         return _buildErrorScreen();
+      case AppState.migrationNeeded:
+        return DataMigrationScreen(
+          palletModel: _model,
+          repository: _repository,
+          onMigrationComplete: () => _handleMigrationComplete(),
+        );
     }
   }
 

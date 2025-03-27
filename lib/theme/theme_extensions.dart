@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import 'app_theme.dart';
 
@@ -74,4 +73,51 @@ extension ThemeExtensions on BuildContext {
         phone: phone,
         tablet: tablet,
       );
+      
+  // Text style extensions
+  
+  /// Extra small (tiny) text style
+  TextStyle get tinyText => TextStyle(fontSize: 10);
+  
+  /// Small text style
+  TextStyle get smallText => TextStyle(fontSize: 12);
+  
+  /// Medium text style
+  TextStyle get mediumText => TextStyle(fontSize: 14);
+  
+  /// Large text style
+  TextStyle get largeText => TextStyle(fontSize: 16);
+  
+  /// Extra large text style
+  TextStyle get xLargeText => TextStyle(fontSize: 18);
+  
+  /// Tiny text style with weight
+  TextStyle tinyTextWeight(FontWeight weight) => tinyText.copyWith(fontWeight: weight);
+  
+  /// Small text style with weight
+  TextStyle smallTextWeight(FontWeight weight) => smallText.copyWith(fontWeight: weight);
+  
+  /// Medium text style with weight
+  TextStyle mediumTextWeight(FontWeight weight) => mediumText.copyWith(fontWeight: weight);
+  
+  /// Large text style with weight
+  TextStyle largeTextWeight(FontWeight weight) => largeText.copyWith(fontWeight: weight);
+  
+  /// Extra large text style with weight
+  TextStyle xLargeTextWeight(FontWeight weight) => xLargeText.copyWith(fontWeight: weight);
+  
+  /// Tiny text style with color
+  TextStyle tinyTextColor(Color color) => tinyText.copyWith(color: color);
+  
+  /// Small text style with color
+  TextStyle smallTextColor(Color color) => smallText.copyWith(color: color);
+  
+  /// Medium text style with color
+  TextStyle mediumTextColor(Color color) => mediumText.copyWith(color: color);
+  
+  /// Large text style with color
+  TextStyle largeTextColor(Color color) => largeText.copyWith(color: color);
+  
+  /// Extra large text style with color
+  TextStyle xLargeTextColor(Color color) => xLargeText.copyWith(color: color);
 }

@@ -11,17 +11,21 @@ class DialogUtils {
   /// Shows a dialog to add a new pallet
   /// Used in both HomeScreen and InventoryScreen
   static void showAddPalletDialog(BuildContext context) {
-    final palletModel = Provider.of<PalletModel>(context, listen: false);
-
-    // Set default name "Pallet X" based on the next ID
-    final int nextId = palletModel.getNextPalletId();
-    final nameController = TextEditingController(text: "Pallet $nextId");
+    final formKey = GlobalKey<FormState>();
+    final nameController = TextEditingController();
     final tagController = TextEditingController();
     final costController = TextEditingController();
+    
+    // Get the model to access saved tags
+    final palletModel = Provider.of<PalletModel>(context, listen: false);
+    final int nextId = palletModel.generatePalletId();
+    
+    // Get saved tags for autocomplete
+    final savedTags = palletModel.savedTags.toList();
+    
     final dateController = TextEditingController(
       text: "${DateTime.now().month}/${DateTime.now().day}/${DateTime.now().year}"
     );
-    final formKey = GlobalKey<FormState>();
     DateTime selectedDate = DateTime.now();
 
     // Function to show date picker
@@ -489,6 +493,89 @@ class DialogUtils {
         );
       },
     );
+  }
+
+  // Create new Pallet dialog
+  static Future<Pallet?> showCreatePalletDialog(BuildContext context, PalletModel palletModel) async {
+    final nameController = TextEditingController();
+    final tagController = TextEditingController();
+    final costController = TextEditingController();
+    String? tagError;
+    double? enteredCost;
+    
+    // Get the next available pallet ID from the model
+    final int nextId = palletModel.palletIdCounter;
+    
+    // Default a reasonable name
+    nameController.text = 'Pallet #$nextId';
+    
+    final result = await showDialog<Pallet?>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text("Add New Pallet"),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  controller: nameController,
+                  decoration: InputDecoration(label: Text("Name")),
+                ),
+                TextFormField(
+                  controller: tagController,
+                  decoration: InputDecoration(label: Text("Tag")),
+                ),
+                TextFormField(
+                  controller: costController,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(label: Text("Cost")),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text("CANCEL"),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                final name = nameController.text.trim();
+                final tag = tagController.text.trim();
+                final cost = double.tryParse(costController.text);
+                
+                if (name.isEmpty) {
+                  tagError = "Please enter a name";
+                } else if (cost == null) {
+                  tagError = "Please enter a valid cost";
+                } else if (palletModel.palletNameExists(name)) {
+                  tagError = "A pallet with this name already exists";
+                } else {
+                  enteredCost = cost;
+                  tagError = null;
+                }
+
+                if (tagError == null) {
+                  final pallet = Pallet(
+                    id: nextId,
+                    name: name,
+                    tag: tag,
+                    totalCost: enteredCost!,
+                    date: DateTime.now(),
+                  );
+                  palletModel.addPallet(pallet);
+                  Navigator.pop(context, pallet);
+                }
+              },
+              child: Text("ADD"),
+            ),
+          ],
+        );
+      },
+    );
+
+    return result;
   }
 }
 

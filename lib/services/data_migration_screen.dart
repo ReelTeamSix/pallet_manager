@@ -1,34 +1,42 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:pallet_manager/pallet_model.dart';
-import 'package:pallet_manager/services/supabase_service.dart';
 import 'package:pallet_manager/services/data_repository.dart';
+import 'package:pallet_manager/services/auth_service.dart';
 import 'package:pallet_manager/utils/log_utils.dart';
+import 'package:pallet_manager/utils/responsive_utils.dart';
+import 'package:pallet_manager/utils/extensions.dart';
 
 class DataMigrationScreen extends StatefulWidget {
   final PalletModel palletModel;
-  final Set<String> savedTags;
-  final VoidCallback onMigrationComplete;
-
+  final DataRepository repository;
+  final VoidCallback? onMigrationComplete;
+  
   const DataMigrationScreen({
     Key? key,
     required this.palletModel,
-    required this.savedTags,
-    required this.onMigrationComplete,
+    required this.repository,
+    this.onMigrationComplete,
   }) : super(key: key);
 
   @override
-  State<DataMigrationScreen> createState() => _DataMigrationScreenState();
+  _DataMigrationScreenState createState() => _DataMigrationScreenState();
 }
 
 class _DataMigrationScreenState extends State<DataMigrationScreen> {
+  bool _isMigrating = false;
+  String _statusMessage = 'Starting migration...';
+  double _progress = 0.0;
+  bool _migrationCompleted = false;
+  bool _migrationFailed = false;
+  late final AuthService _authService = AuthService();
   bool _isLoading = false;
-  bool _migrationComplete = false;
-  String? _errorMessage;
   bool _isDisposed = false;
   int _totalPallets = 0;
   int _totalItems = 0;
   int _totalTags = 0;
   bool _dataLoaded = false;
+  String? _errorMessage;
 
   @override
   void initState() {
@@ -89,74 +97,78 @@ class _DataMigrationScreenState extends State<DataMigrationScreen> {
       if (mounted) {
         setState(() {
           _isLoading = false;
+          _dataLoaded = true;
         });
       }
     }
   }
 
   Future<void> _startMigration() async {
-    LogUtils.info('DataMigrationScreen: Starting migration process (manually triggered)');
+    if (_isMigrating) return;
     
-    if (mounted) {
-      setState(() {
-        _isLoading = true;
-        _errorMessage = null;
-      });
-    }
-
+    setState(() {
+      _isMigrating = true;
+      _statusMessage = 'Preparing to migrate your data...';
+      _progress = 0.05;
+    });
+    
     try {
-      final repository = Provider.of<DataRepository>(context, listen: false);
-      
-      if (!_authService.isAuthenticated) {
-        LogUtils.warning('DataMigrationScreen: Migration failed - user not authenticated');
-        if (mounted) {
-          setState(() {
-            _errorMessage = 'You must sign in before migrating data';
-            _isLoading = false;
-          });
-        }
+      // Check authentication status
+      if (!widget.repository.isAuthenticated) {
+        setState(() {
+          _statusMessage = 'Error: You must be signed in to migrate data';
+          _migrationFailed = true;
+          _isMigrating = false;
+        });
         return;
       }
       
-      LogUtils.info('DataMigrationScreen: Starting data migration to Supabase...');
+      // Start the migration process
+      setState(() {
+        _statusMessage = 'Starting data migration...';
+        _progress = 0.1;
+      });
       
-      final success = await repository.migrateDataToSupabase();
+      // Use the palletModel directly from widget
+      final success = await widget.palletModel.migrateDataToSupabase();
       
+      if (!mounted) return;
+        
       if (success) {
-        LogUtils.info('DataMigrationScreen: ✅ Migration completed successfully');
-        
-        LogUtils.info('DataMigrationScreen: Reloading data after successful migration');
-        
-        // Load migrated data from Supabase
-        final model = Provider.of<PalletModel>(context, listen: false);
-        await model.forceDataReload();
-        
-        if (mounted) {
-          setState(() {
-            _migrationComplete = true;
-            _isLoading = false;
-          });
-          
-          // REMOVED: No longer automatically calling onMigrationComplete
-          // The user will now need to explicitly tap the "Continue" button
-          LogUtils.info('DataMigrationScreen: Migration UI updated to show success state');
-        }
+        setState(() {
+          _statusMessage = 'Migration completed successfully!';
+          _migrationCompleted = true;
+          _progress = 1.0;
+        });
       } else {
-        LogUtils.warning('DataMigrationScreen: ❌ Migration failed');
-        if (mounted) {
-          setState(() {
-            _errorMessage = 'Migration failed. Please try again.';
-            _isLoading = false;
-          });
-        }
+        setState(() {
+          _statusMessage = 'Migration failed. Please try again later.';
+          _migrationFailed = true;
+          _progress = 0;
+        });
       }
     } catch (e) {
-      LogUtils.error('DataMigrationScreen: Migration error', e);
-      if (!mounted || _isDisposed) return;
+      if (!mounted) return;
+      
       setState(() {
-        _errorMessage = 'Migration failed: $e';
-        _isLoading = false;
+        _statusMessage = 'Error during migration: ${e.toString()}';
+        _migrationFailed = true;
+        _progress = 0;
       });
+      
+      LogUtils.error('Migration error', e);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isMigrating = false;
+        });
+      }
+    }
+  }
+
+  void _onMigrationComplete() {
+    if (widget.onMigrationComplete != null) {
+      widget.onMigrationComplete!();
     }
   }
 
@@ -176,7 +188,7 @@ class _DataMigrationScreenState extends State<DataMigrationScreen> {
               _buildMigrationSummary(),
               const SizedBox(height: 24),
               
-              if (_migrationComplete) 
+              if (_migrationCompleted) 
                 _buildSuccessView() 
               else if (_isLoading) 
                 _buildProgressIndicator() 
@@ -325,7 +337,7 @@ class _DataMigrationScreenState extends State<DataMigrationScreen> {
             LogUtils.info('Navigating away from migration screen to home');
             
             // First trigger the callback to update parent state
-            widget.onMigrationComplete();
+            _onMigrationComplete();
             
             // Navigate to home screen with a slight delay to ensure callback is processed
             Future.delayed(Duration.zero, () {
@@ -389,7 +401,7 @@ class _DataMigrationScreenState extends State<DataMigrationScreen> {
             TextButton(
               onPressed: () {
                 LogUtils.info('User chose to continue without migrating');
-                widget.onMigrationComplete();
+                _onMigrationComplete();
                 
                 // Use a microtask to ensure the callback is processed first
                 Future.microtask(() {
