@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:pallet_manager/services/supabase_service.dart';
+import 'package:pallet_manager/utils/log_utils.dart';
 
 enum AuthMode { signIn, signUp }
 
@@ -60,7 +61,7 @@ class _AuthScreenState extends State<AuthScreen> {
       final password = _passwordController.text;
 
       if (_authMode == AuthMode.signUp) {
-        debugPrint('Signing up with email: $email');
+        LogUtils.info('Signing up with email: $email');
         await SupabaseService.instance.signUpWithEmail(email, password);
         
         if (mounted) {
@@ -73,7 +74,7 @@ class _AuthScreenState extends State<AuthScreen> {
           );
         }
       } else {
-        debugPrint('Signing in with email: $email');
+        LogUtils.info('Signing in with email: $email');
         await SupabaseService.instance.signInWithEmail(email, password);
         
         // Call onAuthSuccess callback after successful sign in

@@ -68,62 +68,70 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> with SingleTickerPr
       _isEditing = true;
     }
     
-    // Add listener to app lifecycle changes
+    // Add observer to handle app lifecycle
     WidgetsBinding.instance.addObserver(
       _AppLifecycleObserver(onResume: _handleAppResume)
     );
   }
 
+  // Optimize app resume handling with more efficient state management
   void _handleAppResume() {
     // Prevent excessive refreshes within short time periods
     final now = DateTime.now();
-    if (now.difference(_lastLifecycleRefresh).inSeconds < 1) {
+    if (now.difference(_lastRefreshTime).inSeconds < 2) {
       return;
     }
-    _lastLifecycleRefresh = now;
+    _lastRefreshTime = now;
 
     if (mounted) {
-      // Force reload the whole screen state
-      setState(() {
-        _lifecycleKey = UniqueKey();
-
-        // Store the current values before disposing
-        final name = _nameController.text;
-        final retailPrice = _retailPriceController.text;
-        final listPrice = _listPriceController.text;
-        final condition = _selectedCondition;
-        final wasInEditMode = _isEditing; // Save edit state
-
-        // Clear and reinitialize all controllers to prevent stale data
-        _disposeControllers();
-        _initializeControllers();
-
-        // Restore values if they were changed by the user
-        if (name.isNotEmpty && name != widget.item.name) {
-          _nameController.text = name;
+      // Get the latest data from the model using Provider
+      final palletModel = Provider.of<PalletModel>(context, listen: false);
+      
+      try {
+        // Get the latest pallet
+        final currentPallet = palletModel.pallets.firstWhere(
+          (p) => p.id == widget.pallet.id,
+        );
+        
+        // Get the latest item
+        final currentItem = currentPallet.items.firstWhere(
+          (i) => i.id == widget.item.id,
+        );
+        
+        // Only update if data has changed and we're not currently editing
+        if (!_isEditing && _hasItemDataChanged(currentItem)) {
+          setState(() {
+            // Update controllers with latest data
+            _nameController.text = currentItem.name;
+            _retailPriceController.text = currentItem.retailPrice?.toString() ?? '';
+            _listPriceController.text = currentItem.listPrice?.toString() ?? '';
+            _productCodeController.text = currentItem.productCode ?? '';
+            _selectedCondition = currentItem.condition ?? 'New';
+            
+            if (currentItem.photos != null) {
+              _itemPhotos = List.from(currentItem.photos!);
+            }
+          });
         }
-
-        if (retailPrice.isNotEmpty &&
-            (widget.item.retailPrice == null ||
-                retailPrice != widget.item.retailPrice.toString())) {
-          _retailPriceController.text = retailPrice;
-        }
-
-        if (listPrice.isNotEmpty &&
-            (widget.item.listPrice == null ||
-                listPrice != widget.item.listPrice.toString())) {
-          _listPriceController.text = listPrice;
-        }
-
-        if (condition != widget.item.condition) {
-          _selectedCondition = condition;
-        }
-
-        // Restore editing state if applicable
-        _isEditing =
-            wasInEditMode && !widget.pallet.isClosed && !widget.item.isSold;
-      });
+      } catch (e) {
+        // Handle case where item or pallet is no longer in the model
+        // (for example, if it was deleted while app was in background)
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Item may have been removed or updated'))
+        );
+      }
     }
+  }
+  
+  // Helper to check if item data has changed
+  bool _hasItemDataChanged(PalletItem currentItem) {
+    return widget.item.name != currentItem.name ||
+        widget.item.retailPrice != currentItem.retailPrice ||
+        widget.item.listPrice != currentItem.listPrice ||
+        widget.item.productCode != currentItem.productCode ||
+        widget.item.condition != currentItem.condition ||
+        widget.item.isSold != currentItem.isSold ||
+        !_arePhotoListsEqual(widget.item.photos, currentItem.photos);
   }
 
   void _disposeControllers() {
@@ -1844,25 +1852,16 @@ class _ItemDetailScreenState extends State<ItemDetailScreen> with SingleTickerPr
 
 }
 
-// Add this utility class for app lifecycle observation at the end of your file
+// Add this improved AppLifecycleObserver at the end of the file
 class _AppLifecycleObserver extends WidgetsBindingObserver {
   final VoidCallback onResume;
-
+  
   _AppLifecycleObserver({required this.onResume});
-
+  
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       onResume();
     }
   }
-
-  @override
-  bool operator ==(Object other) {
-    if (identical(this, other)) return true;
-    return other is _AppLifecycleObserver;
-  }
-
-  @override
-  int get hashCode => onResume.hashCode;
 }

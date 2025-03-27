@@ -4,6 +4,7 @@ import 'package:pallet_manager/services/data_migration_screen.dart';
 import 'package:pallet_manager/services/data_repository.dart';
 import 'package:pallet_manager/services/supabase_service.dart';
 import 'package:pallet_manager/utils/app_lifecycle_manager.dart';
+import 'package:pallet_manager/utils/log_utils.dart'; // Import LogUtils
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'pallet_model.dart';
@@ -13,7 +14,6 @@ import 'analytics_screen.dart';
 import 'settings_screen.dart';
 import 'theme/app_theme.dart'; // Import app theme
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:flutter/foundation.dart' show debugPrint;
 
 enum AppState {
   initializing,

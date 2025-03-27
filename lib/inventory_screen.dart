@@ -5,6 +5,7 @@ import 'pallet_model.dart';
 import 'pallet_detail_screen.dart';
 import 'responsive_utils.dart'; // Import responsive utilities
 import 'utils/dialog_utils.dart'; // Import dialog utilities
+import 'theme/theme_extensions.dart';
 
 class InventoryScreen extends StatefulWidget {
   const InventoryScreen({super.key});
@@ -773,6 +774,75 @@ class _InventoryScreenState extends State<InventoryScreen> {
   void _showAddPalletDialog(BuildContext context) {
     DialogUtils.showAddPalletDialog(context);
   }
+
+  // Replace both _buildPhonePalletCard and _buildTabletPalletCard methods with this shared method
+  Widget _buildPalletCard(BuildContext context, Pallet pallet, PalletModel model, bool isTablet) {
+    return PalletCard(
+      pallet: pallet,
+      model: model,
+      isTablet: isTablet,
+      onDelete: _confirmDeletePallet,
+    );
+  }
+
+  // Update _buildPalletList to use _buildPalletCard instead of separate methods
+  Widget _buildPalletList() {
+    return Consumer<PalletModel>(
+      builder: (context, palletModel, child) {
+        final pallets = palletModel.pallets;
+        if (pallets.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.inventory_2_outlined,
+                  size: 64,
+                  color: Colors.grey.shade400,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  "No pallets yet",
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey.shade700,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  "Tap + to add your first pallet",
+                  style: TextStyle(
+                    color: Colors.grey.shade600,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return RefreshIndicator(
+          onRefresh: () => _refreshData(),
+          child: ListView.builder(
+            itemCount: pallets.length,
+            padding: EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 8,
+            ),
+            itemBuilder: (context, index) {
+              final pallet = pallets[index];
+              return _buildPalletCard(
+                context,
+                pallet,
+                palletModel,
+                _isTablet, // Pass tablet flag to build appropriate layout
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
 }
 
 // Helper widget for very compact action buttons
@@ -853,4 +923,318 @@ class _TabletActionButton extends StatelessWidget {
       onPressed: onPressed,
     );
   }
+}
+
+// Replace the _buildPhonePalletCard and _buildTabletPalletCard methods with this reusable widget
+class PalletCard extends StatelessWidget {
+  final Pallet pallet;
+  final PalletModel model;
+  final bool isTablet;
+  final Function(BuildContext, PalletModel, Pallet) onDelete;
+
+  const PalletCard({
+    Key? key,
+    required this.pallet,
+    required this.model,
+    required this.onDelete,
+    this.isTablet = false,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 1,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => PalletDetailScreen(pallet: pallet),
+          ),
+        ),
+        onLongPress: () => onDelete(context, model, pallet),
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: isTablet 
+              ? _buildTabletLayout(context)
+              : _buildPhoneLayout(context),
+        ),
+      ),
+    );
+  }
+
+  // Phone layout 
+  Widget _buildPhoneLayout(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            CircleAvatar(
+              backgroundColor: pallet.isClosed 
+                  ? Colors.green.shade100 
+                  : Theme.of(context).colorScheme.primary.withOpacity(0.1),
+              child: Icon(
+                pallet.isClosed ? Icons.check_circle : Icons.inventory,
+                color: pallet.isClosed 
+                    ? Colors.green 
+                    : Theme.of(context).colorScheme.primary,
+                size: ResponsiveUtils.getIconSize(context, IconSizeType.medium),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    pallet.name,
+                    style: context.mediumTextWeight(FontWeight.bold),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.tag,
+                        size: ResponsiveUtils.getIconSize(context, IconSizeType.tiny),
+                        color: Colors.grey,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        pallet.tag.isEmpty ? 'No Tag' : pallet.tag,
+                        style: context.smallText.copyWith(color: Colors.grey),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            _buildInfoItem(
+              context,
+              'Items',
+              '${pallet.items.length}',
+              Icons.list,
+            ),
+            _buildInfoItem(
+              context,
+              'Cost',
+              '\$${pallet.totalCost.toStringAsFixed(2)}',
+              Icons.attach_money,
+            ),
+            _buildInfoItem(
+              context,
+              'Profit',
+              '\$${pallet.profit.toStringAsFixed(2)}',
+              Icons.trending_up,
+              valueColor: pallet.profit >= 0 ? Colors.green : Colors.red,
+            ),
+          ],
+        ),
+        if (pallet.isClosed) ...[
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.green,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              'CLOSED',
+              style: context.tinyTextWeight(FontWeight.bold).copyWith(
+                color: Colors.white,
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  // Tablet layout
+  Widget _buildTabletLayout(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            CircleAvatar(
+              backgroundColor: pallet.isClosed 
+                  ? Colors.green.shade100 
+                  : Theme.of(context).colorScheme.primary.withOpacity(0.1),
+              child: Icon(
+                pallet.isClosed ? Icons.check_circle : Icons.inventory,
+                color: pallet.isClosed 
+                    ? Colors.green 
+                    : Theme.of(context).colorScheme.primary,
+                size: ResponsiveUtils.getIconSize(context, IconSizeType.medium),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    pallet.name,
+                    style: context.largeTextWeight(FontWeight.bold),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.calendar_today,
+                        size: ResponsiveUtils.getIconSize(context, IconSizeType.tiny),
+                        color: Colors.grey,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        _formatDate(pallet.date),
+                        style: context.smallText.copyWith(color: Colors.grey),
+                      ),
+                      const SizedBox(width: 12),
+                      Icon(
+                        Icons.tag,
+                        size: ResponsiveUtils.getIconSize(context, IconSizeType.tiny),
+                        color: Colors.grey,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        pallet.tag.isEmpty ? 'No Tag' : pallet.tag,
+                        style: context.smallText.copyWith(color: Colors.grey),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            if (pallet.isClosed)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.green,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  'CLOSED',
+                  style: context.smallTextWeight(FontWeight.bold).copyWith(
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            _buildInfoItem(
+              context,
+              'Items',
+              '${pallet.items.length}',
+              Icons.list,
+              showLabel: true,
+            ),
+            _buildInfoItem(
+              context,
+              'Total Cost',
+              '\$${pallet.totalCost.toStringAsFixed(2)}',
+              Icons.attach_money,
+              showLabel: true,
+            ),
+            _buildInfoItem(
+              context,
+              'Profit',
+              '\$${pallet.profit.toStringAsFixed(2)}',
+              Icons.trending_up,
+              valueColor: pallet.profit >= 0 ? Colors.green : Colors.red,
+              showLabel: true,
+            ),
+            _buildInfoItem(
+              context,
+              'Revenue',
+              '\$${pallet.totalRevenue.toStringAsFixed(2)}',
+              Icons.payments,
+              showLabel: true,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildInfoItem(
+    BuildContext context,
+    String label,
+    String value,
+    IconData icon, {
+    Color? valueColor,
+    bool showLabel = false,
+  }) {
+    return Column(
+      children: [
+        Row(
+          children: [
+            Icon(
+              icon,
+              size: ResponsiveUtils.getIconSize(context, IconSizeType.small),
+              color: Colors.grey.shade600,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              value,
+              style: context.smallTextWeight(FontWeight.bold).copyWith(
+                color: valueColor ?? Colors.black,
+              ),
+            ),
+          ],
+        ),
+        if (showLabel) ...[
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: context.tinyText.copyWith(color: Colors.grey),
+          ),
+        ],
+      ],
+    );
+  }
+
+  String _formatDate(DateTime date) {
+    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+  }
+}
+
+// Update the inventory screen's ListView builder to use the new widget
+Widget _buildInventoryContent(BuildContext context, PalletModel model) {
+  final isTablet = ResponsiveUtils.isTablet(context);
+  
+  if (model.pallets.isEmpty) {
+    return _buildEmptyState(context);
+  }
+
+  return ListView.builder(
+    padding: ResponsiveUtils.getPadding(context, PaddingType.medium),
+    itemCount: model.pallets.length,
+    itemBuilder: (context, index) {
+      final pallet = model.pallets[index];
+      return PalletCard(
+        pallet: pallet,
+        model: model,
+        isTablet: isTablet,
+        onDelete: _confirmDeletePallet,
+      );
+    },
+  );
 }

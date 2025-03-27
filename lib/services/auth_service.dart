@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:log_utils/log_utils.dart';
 
 class AuthService {
   static final AuthService _instance = AuthService._internal();
@@ -12,7 +13,7 @@ class AuthService {
 
   Future<void> ensureUserProfileExists(String userId, String userEmail) async {
     try {
-      debugPrint('AUTH: Checking if profile exists for user $userId');
+      LogUtils.info('AUTH: Checking if profile exists for user $userId');
       
       // Check if profile exists
       final profile = await _supabase
@@ -22,21 +23,21 @@ class AuthService {
           .maybeSingle();
       
       if (profile == null) {
-        debugPrint('AUTH: Profile not found, creating new profile');
+        LogUtils.info('AUTH: Profile not found, creating new profile');
         await _supabase.from('profiles').insert({
           'id': userId,
           'email': userEmail,
           'name': 'Default Name',
           'created_at': DateTime.now().toIso8601String(),
         });
-        debugPrint('AUTH: Profile created successfully');
+        LogUtils.info('AUTH: Profile created successfully');
       } else {
-        debugPrint('AUTH: Profile already exists');
+        LogUtils.info('AUTH: Profile already exists');
       }
     } catch (e) {
-      debugPrint('AUTH: Error ensuring profile exists: $e');
+      LogUtils.error('AUTH: Error ensuring profile exists: $e');
       if (e is PostgrestException) {
-        debugPrint('AUTH: Postgrest error details - code: ${e.code}, message: ${e.message}, details: ${e.details}, hint: ${e.hint}');
+        LogUtils.error('AUTH: Postgrest error details - code: ${e.code}, message: ${e.message}, details: ${e.details}, hint: ${e.hint}');
       }
       rethrow;
     }
@@ -44,47 +45,47 @@ class AuthService {
 
   Future<void> signInWithEmail(String email, String password) async {
     try {
-      debugPrint('AUTH: Attempting sign in for $email');
+      LogUtils.info('AUTH: Attempting sign in for $email');
       final response = await _supabase.auth.signInWithPassword(
         email: email,
         password: password,
       );
       
       if (response.user != null) {
-        debugPrint('AUTH: Sign in successful for user ${response.user!.id}');
+        LogUtils.info('AUTH: Sign in successful for user ${response.user!.id}');
         await ensureUserProfileExists(response.user!.id, response.user!.email!);
       }
     } catch (e) {
-      debugPrint('AUTH: Sign in error: $e');
+      LogUtils.error('AUTH: Sign in error: $e');
       rethrow;
     }
   }
 
   Future<void> signUpWithEmail(String email, String password) async {
     try {
-      debugPrint('AUTH: Attempting sign up for $email');
+      LogUtils.info('AUTH: Attempting sign up for $email');
       final response = await _supabase.auth.signUp(
         email: email,
         password: password,
       );
       
       if (response.user != null) {
-        debugPrint('AUTH: Sign up successful for user ${response.user!.id}');
+        LogUtils.info('AUTH: Sign up successful for user ${response.user!.id}');
         await ensureUserProfileExists(response.user!.id, response.user!.email!);
       }
     } catch (e) {
-      debugPrint('AUTH: Sign up error: $e');
+      LogUtils.error('AUTH: Sign up error: $e');
       rethrow;
     }
   }
 
   Future<void> signOut() async {
     try {
-      debugPrint('AUTH: Signing out user ${currentUser?.id}');
+      LogUtils.info('AUTH: Signing out user ${currentUser?.id}');
       await _supabase.auth.signOut();
-      debugPrint('AUTH: Sign out successful');
+      LogUtils.info('AUTH: Sign out successful');
     } catch (e) {
-      debugPrint('AUTH: Sign out error: $e');
+      LogUtils.error('AUTH: Sign out error: $e');
       rethrow;
     }
   }

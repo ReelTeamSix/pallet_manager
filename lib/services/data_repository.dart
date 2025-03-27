@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:pallet_manager/pallet_model.dart';
 import 'package:pallet_manager/services/supabase_service.dart';
+import 'package:pallet_manager/utils/log_utils.dart';
 
 enum DataSource {
   sharedPreferences,
@@ -46,7 +47,7 @@ class DataRepository with ChangeNotifier {
               _hasMigratedData = true;
             }
           } catch (e) {
-            debugPrint('Error checking migration status from server: $e');
+            LogUtils.error('Error checking migration status from server', e);
             // Continue without setting migration flag
           }
         }
@@ -65,13 +66,13 @@ class DataRepository with ChangeNotifier {
 
     // If migration is complete, NEVER allow switching data sources
     if (_hasMigratedData) {
-      debugPrint('Migration is complete, data sources cannot be changed');
+      LogUtils.warning('Migration is complete, data sources cannot be changed');
       return;
     }
 
     await _performOperation(
       operation: () async {
-        debugPrint('Switching data source from $_dataSource to $source');
+        LogUtils.info('Switching data source from $_dataSource to $source');
         _dataSource = source;
         notifyListeners();
       },
@@ -105,27 +106,27 @@ class DataRepository with ChangeNotifier {
 
   // Load pallets from Supabase
   Future<List<Pallet>> _loadPalletsFromSupabase({bool lazyLoadItems = false}) async {
-    debugPrint('REPOSITORY: Loading pallets from Supabase (lazyLoadItems=$lazyLoadItems)');
+    LogUtils.info('REPOSITORY: Loading pallets from Supabase (lazyLoadItems=$lazyLoadItems)');
     if (SupabaseService.instance.currentUser == null) {
-      debugPrint('REPOSITORY: Cannot load pallets from Supabase: User not authenticated');
+      LogUtils.warning('REPOSITORY: Cannot load pallets from Supabase: User not authenticated');
       return [];
     }
     
-    debugPrint('REPOSITORY: User authenticated, attempting to get pallets from Supabase');
+    LogUtils.info('REPOSITORY: User authenticated, attempting to get pallets from Supabase');
     try {
       if (lazyLoadItems) {
         // Only load pallet headers without items for better performance
         final pallets = await SupabaseService.instance.getPalletHeaders();
-        debugPrint('REPOSITORY: Loaded ${pallets.length} pallet headers (lazy loading)');
+        LogUtils.info('REPOSITORY: Loaded ${pallets.length} pallet headers (lazy loading)');
         return pallets;
       } else {
         // Load complete pallets with all items
         final pallets = await SupabaseService.instance.getPallets();
-        debugPrint('REPOSITORY: Loaded ${pallets.length} pallets with items');
+        LogUtils.info('REPOSITORY: Loaded ${pallets.length} pallets with items');
         return pallets;
       }
     } catch (e) {
-      debugPrint('REPOSITORY: Error loading pallets from Supabase: $e');
+      LogUtils.error('REPOSITORY: Error loading pallets from Supabase', e);
       return [];
     }
   }
@@ -162,42 +163,42 @@ class DataRepository with ChangeNotifier {
   Future<List<Pallet>> _loadPalletsFromSharedPreferences() async {
     final prefs = await SharedPreferences.getInstance();
     final palletsJson = prefs.getString('pallets');
-    print('📊 Loading pallets from SharedPreferences...');
+    LogUtils.info('📊 Loading pallets from SharedPreferences...');
     
     if (palletsJson == null) {
-      print('❌ No pallets data found in SharedPreferences');
+      LogUtils.warning('❌ No pallets data found in SharedPreferences');
       await _debugPrintSharedPrefsContents();
       return [];
     }
     
     try {
-      print('📦 Found pallets JSON of length: ${palletsJson.length}');
+      LogUtils.info('📦 Found pallets JSON of length: ${palletsJson.length}');
       final List<dynamic> palletsList = json.decode(palletsJson);
-      print('📋 Successfully decoded JSON, found ${palletsList.length} pallets');
+      LogUtils.info('📋 Successfully decoded JSON, found ${palletsList.length} pallets');
       
       if (palletsList.isEmpty) {
-        print('⚠️ Warning: Pallets list is empty after decoding');
+        LogUtils.warning('⚠️ Warning: Pallets list is empty after decoding');
         return [];
       }
       
       // Test parse one pallet to catch issues
       try {
         final testPallet = Pallet.fromJson(palletsList.first);
-        print('✅ Successfully test-parsed first pallet: ${testPallet.name}');
+        LogUtils.info('✅ Successfully test-parsed first pallet: ${testPallet.name}');
       } catch (e) {
-        print('⚠️ Warning: Error parsing test pallet: $e');
+        LogUtils.warning('⚠️ Warning: Error parsing test pallet: $e');
       }
       
       final result = palletsList.map((json) => Pallet.fromJson(json)).toList();
-      print('✅ Successfully parsed ${result.length} pallets from SharedPreferences');
+      LogUtils.info('✅ Successfully parsed ${result.length} pallets from SharedPreferences');
       return result;
     } catch (e) {
-      print('❌ Error loading pallets from SharedPreferences: $e');
+      LogUtils.error('❌ Error loading pallets from SharedPreferences', e);
       
       // Try to show a sample of the data for debugging
       if (palletsJson != null && palletsJson.isNotEmpty) {
         final sample = palletsJson.length > 100 ? palletsJson.substring(0, 100) + '...' : palletsJson;
-        print('📄 JSON sample: $sample');
+        LogUtils.log('DEBUG', '📄 JSON sample: $sample');
       }
       
       // Check all SharedPreferences content
@@ -209,52 +210,52 @@ class DataRepository with ChangeNotifier {
   // Debug helper to print all SharedPreferences contents
   Future<void> _debugPrintSharedPrefsContents() async {
     try {
-      print('🔍 DEBUG: Examining all SharedPreferences contents...');
+      LogUtils.log('DEBUG', '🔍 Examining all SharedPreferences contents...');
       final prefs = await SharedPreferences.getInstance();
       final keys = prefs.getKeys();
       
-      print('📑 Found ${keys.length} keys in SharedPreferences:');
+      LogUtils.log('DEBUG', '📑 Found ${keys.length} keys in SharedPreferences:');
       for (final key in keys) {
         try {
           if (key == 'pallets') {
             final palletStr = prefs.getString(key);
-            print('  - $key: ${palletStr == null ? "null" : "${palletStr.length} chars"}');
+            LogUtils.log('DEBUG', '  - $key: ${palletStr == null ? "null" : "${palletStr.length} chars"}');
           } else if (key == 'tags') {
             final tagsStr = prefs.getString(key);
             if (tagsStr != null) {
               try {
                 final tagsList = json.decode(tagsStr);
-                print('  - $key: ${tagsList.length} tags');
+                LogUtils.log('DEBUG', '  - $key: ${tagsList.length} tags');
               } catch (e) {
-                print('  - $key: Error decoding - $e');
+                LogUtils.log('DEBUG', '  - $key: Error decoding - $e');
               }
             } else {
-              print('  - $key: null');
+              LogUtils.log('DEBUG', '  - $key: null');
             }
           } else {
             // For other keys, just show their type and existence
             if (prefs.getString(key) != null) {
-              print('  - $key: [String]');
+              LogUtils.log('DEBUG', '  - $key: [String]');
             } else if (prefs.getBool(key) != null) {
-              print('  - $key: [Bool] ${prefs.getBool(key)}');
+              LogUtils.log('DEBUG', '  - $key: [Bool] ${prefs.getBool(key)}');
             } else if (prefs.getInt(key) != null) {
-              print('  - $key: [Int] ${prefs.getInt(key)}');
+              LogUtils.log('DEBUG', '  - $key: [Int] ${prefs.getInt(key)}');
             } else if (prefs.getDouble(key) != null) {
-              print('  - $key: [Double] ${prefs.getDouble(key)}');
+              LogUtils.log('DEBUG', '  - $key: [Double] ${prefs.getDouble(key)}');
             } else if (prefs.getStringList(key) != null) {
-              print('  - $key: [StringList] ${prefs.getStringList(key)?.length} items');
+              LogUtils.log('DEBUG', '  - $key: [StringList] ${prefs.getStringList(key)?.length} items');
             } else {
-              print('  - $key: [Unknown type]');
+              LogUtils.log('DEBUG', '  - $key: [Unknown type]');
             }
           }
         } catch (e) {
-          print('  - $key: Error getting value - $e');
+          LogUtils.error('  - $key: Error getting value', e);
         }
       }
       
-      print('🔍 SharedPreferences examination complete');
+      LogUtils.log('DEBUG', '🔍 SharedPreferences examination complete');
     } catch (e) {
-      print('❌ Error examining SharedPreferences: $e');
+      LogUtils.error('❌ Error examining SharedPreferences', e);
     }
   }
 
@@ -305,21 +306,21 @@ class DataRepository with ChangeNotifier {
           final pallets = await _loadPalletsFromSharedPreferences();
           pallets.removeWhere((p) => p.id == pallet.id);
           await _savePalletsToSharedPreferences(pallets);
-          debugPrint('Removed pallet ${pallet.id} from SharedPreferences');
+          LogUtils.info('Removed pallet ${pallet.id} from SharedPreferences');
         } else {
           // For Supabase, we need to delete the pallet using the supabaseId if available
-          debugPrint('Removing pallet from Supabase, originalId: ${pallet.id}, supabaseId: ${pallet.supabaseId}');
+          LogUtils.info('Removing pallet from Supabase, originalId: ${pallet.id}, supabaseId: ${pallet.supabaseId}');
           if (pallet.supabaseId != null) {
             // Use the direct Supabase ID if available
             await SupabaseService.instance.client
               .from('pallets')
               .delete()
               .eq('id', pallet.supabaseId);
-            debugPrint('Deleted pallet using supabaseId: ${pallet.supabaseId}');
+            LogUtils.info('Deleted pallet using supabaseId: ${pallet.supabaseId}');
           } else {
             // Fall back to looking up by original_id
             await SupabaseService.instance.deletePallet(pallet.id);
-            debugPrint('Deleted pallet using original_id: ${pallet.id}');
+            LogUtils.info('Deleted pallet using original_id: ${pallet.id}');
           }
         }
       },
@@ -344,7 +345,7 @@ class DataRepository with ChangeNotifier {
           // Find the pallet first
           final pallet = await _findPalletById(palletId);
           if (pallet == null) {
-            debugPrint('REPOSITORY: Cannot find pallet with ID $palletId');
+            LogUtils.warning('REPOSITORY: Cannot find pallet with ID $palletId');
             return;
           }
           
@@ -355,11 +356,11 @@ class DataRepository with ChangeNotifier {
               .delete()
               .eq('pallet_id', pallet.supabaseId)
               .eq('original_id', itemId);
-            debugPrint('REPOSITORY: Deleted item using pallet supabaseId: ${pallet.supabaseId}');
+            LogUtils.info('REPOSITORY: Deleted item using pallet supabaseId: ${pallet.supabaseId}');
           } else {
             // Fall back to the old method
             await SupabaseService.instance.deletePalletItem(palletId, itemId);
-            debugPrint('REPOSITORY: Deleted item using pallet original_id: $palletId');
+            LogUtils.info('REPOSITORY: Deleted item using pallet original_id: $palletId');
           }
         }
       },
@@ -512,145 +513,147 @@ class DataRepository with ChangeNotifier {
   }
 
   // Migrate data from SharedPreferences to Supabase - THIS IS A ONE-WAY OPERATION
-  Future<void> migrateDataToSupabase() async {
-    if (_isLoading) return;
-    
-    // If already migrated, don't do it again
-    if (_hasMigratedData) {
-      debugPrint('REPOSITORY: Data already migrated, skipping migration');
-      return;
-    }
-    
-    await _performOperation(
+  Future<bool> migrateDataToSupabase() async {
+    return _performOperation(
       operation: () async {
-        debugPrint('REPOSITORY: Starting one-way migration to Supabase...');
+        LogUtils.info('Starting data migration to Supabase');
         
-        // Check authentication
-        if (!isAuthenticated) {
-          throw Exception('User must be authenticated to migrate data to Supabase');
+        if (SupabaseService.instance.currentUser == null) {
+          LogUtils.warning('Cannot migrate data: User not authenticated');
+          return false;
         }
-
-        // Load data from SharedPreferences
-        final pallets = await _loadPalletsFromSharedPreferences();
-        final tags = await _loadTagsFromSharedPreferences();
-
-        // Check if there's data to migrate
-        if (pallets.isEmpty && tags.isEmpty) {
-          debugPrint('REPOSITORY: No data to migrate, setting migration flag and switching to Supabase');
-        } else {
-          debugPrint('REPOSITORY: Migrating data from SharedPreferences to Supabase...');
-          debugPrint('REPOSITORY: - ${pallets.length} pallets with ${pallets.fold(0, (sum, p) => sum + p.items.length)} items');
-          debugPrint('REPOSITORY: - ${tags.length} tags');
+        
+        try {
+          // First, load data from SharedPreferences
+          final pallets = await _loadPalletsFromSharedPreferences();
+          final tags = await _loadTags();
           
-          try {
-            // Migrate tags first
-            for (final tag in tags) {
-              try {
-                await SupabaseService.instance.createTag(tag);
-              } catch (e) {
-                debugPrint('REPOSITORY: Error migrating tag $tag: $e');
-                // Continue with next tag if this one fails
-              }
+          LogUtils.info('Loaded ${pallets.length} pallets and ${tags.length} tags from SharedPreferences');
+          
+          // Check if we have any data to migrate
+          if (pallets.isEmpty && tags.isEmpty) {
+            LogUtils.info('No data to migrate');
+            return false;
+          }
+          
+          // Migrate in batches to prevent timeouts
+          // First migrate tags (they're simpler)
+          LogUtils.info('Migrating tags...');
+          int tagsMigrated = 0;
+          for (final tag in tags) {
+            try {
+              await SupabaseService.instance.createTag(tag);
+              tagsMigrated++;
+            } catch (e) {
+              LogUtils.error('Failed to migrate tag: $tag', e);
+              // Continue with next tag
             }
-
-            // Migrate pallets in batches
-            const batchSize = 50;
-            for (var i = 0; i < pallets.length; i += batchSize) {
-              final batch = pallets.skip(i).take(batchSize).toList();
-              debugPrint('REPOSITORY: Migrating batch ${(i ~/ batchSize) + 1} of ${(pallets.length / batchSize).ceil()}');
-              
-              for (final pallet in batch) {
-                try {
-                  // Create pallet
-                  final palletResponse = await SupabaseService.instance.createPallet(pallet);
-                  final supabasePalletId = palletResponse['id'];
-                  
-                  // Migrate items in smaller batches
-                  const itemBatchSize = 20;
-                  for (var j = 0; j < pallet.items.length; j += itemBatchSize) {
-                    final itemBatch = pallet.items.skip(j).take(itemBatchSize).toList();
-                    for (final item in itemBatch) {
-                      try {
-                        await SupabaseService.instance.createPalletItem(item, supabasePalletId);
-                      } catch (e) {
-                        debugPrint('REPOSITORY: Error migrating item ${item.id} for pallet ${pallet.id}: $e');
-                        // Continue with next item if this one fails
-                      }
+          }
+          LogUtils.info('Migrated $tagsMigrated/${tags.length} tags');
+          
+          // Then migrate pallets and their items
+          LogUtils.info('Migrating pallets...');
+          int palletsMigrated = 0;
+          int itemsMigrated = 0;
+          int totalItems = pallets.fold(0, (sum, p) => sum + p.items.length);
+          
+          // Process pallets in batches of 5
+          for (int i = 0; i < pallets.length; i += 5) {
+            final batch = pallets.skip(i).take(5).toList();
+            LogUtils.info('Processing batch ${(i ~/ 5) + 1}/${(pallets.length / 5).ceil()} (${batch.length} pallets)');
+            
+            for (final pallet in batch) {
+              try {
+                // Create the pallet in Supabase
+                final createdPallet = await createPalletInSupabase(pallet);
+                if (createdPallet != null) {
+                  int batchItemsMigrated = 0;
+                  // Migrate each item in the pallet
+                  for (final item in pallet.items) {
+                    try {
+                      await createPalletItemInSupabase(item, createdPallet.id);
+                      batchItemsMigrated++;
+                      itemsMigrated++;
+                    } catch (e) {
+                      LogUtils.error('Failed to migrate item ${item.id} in pallet ${pallet.id}', e);
+                      // Continue with next item
                     }
                   }
-                } catch (e) {
-                  debugPrint('REPOSITORY: Error migrating pallet ${pallet.id}: $e');
-                  // Continue with next pallet if this one fails
+                  LogUtils.info('Migrated ${batchItemsMigrated}/${pallet.items.length} items for pallet ${pallet.id}');
+                  palletsMigrated++;
                 }
+              } catch (e) {
+                LogUtils.error('Failed to migrate pallet ${pallet.id}', e);
+                // Continue with next pallet
               }
             }
             
-            debugPrint('REPOSITORY: Data migration completed successfully');
-          } catch (e) {
-            debugPrint('REPOSITORY: Error during data migration: $e');
-            rethrow;
+            // Small delay to prevent rate limiting
+            await Future.delayed(Duration(milliseconds: 500));
           }
+          
+          LogUtils.info('Migrated $palletsMigrated/${pallets.length} pallets and $itemsMigrated/$totalItems items');
+          
+          // Set the migration flag in SharedPreferences
+          await setMigrationCompleted(true);
+          
+          // Clear local data to switch to cloud-only mode
+          await clearLocalData();
+          
+          // Switch to Supabase as data source
+          setDataSource(DataSource.supabase);
+          
+          LogUtils.info('Migration completed, switched to Supabase as data source');
+          return true;
+        } catch (e) {
+          LogUtils.error('Error during migration', e, StackTrace.current);
+          return false;
         }
-
-        // Set migration flag - THIS SHOULD ONLY HAPPEN ONCE
-        _hasMigratedData = true;
-        final prefs = await SharedPreferences.getInstance();
-        debugPrint('REPOSITORY: Setting migration flag in SharedPreferences...');
-        await prefs.setBool('has_migrated_data', true);
-        debugPrint('REPOSITORY: Migration flag set successfully');
-        
-        // Switch to Supabase permanently - NO GOING BACK
-        _dataSource = DataSource.supabase;
-        
-        // Clear local data after migration is complete since we're fully committed to cloud storage
-        await _clearLocalData();
-        
-        notifyListeners();
-        debugPrint('REPOSITORY: Migration to Supabase complete - App is now in CLOUD-ONLY mode');
       },
       errorMessage: 'Failed to migrate data to Supabase',
+      defaultValue: false,
     );
   }
 
   Future<T> _performOperation<T>({
     required Future<T> Function() operation,
     required String errorMessage,
-    T? defaultValue,
+    required T defaultValue,
   }) async {
-    _isLoading = true;
-    _error = null;
-    notifyListeners();
-
     try {
-      final result = await operation();
-      _isLoading = false;
-      notifyListeners();
-      return result;
+      return await operation();
     } catch (e) {
-      _isLoading = false;
-      notifyListeners();
-      
       if (e is PostgrestException) {
-        debugPrint('REPOSITORY: Postgrest error - code: ${e.code}, message: ${e.message}, details: ${e.details}, hint: ${e.hint}');
-        _error = _getUserFriendlyError(e.code, e.message);
+        // Log Supabase-specific error details
+        final errorCode = e.code;
+        final errorMessage = e.message;
+        final errorDetails = e.details;
+        final errorHint = e.hint;
+        
+        LogUtils.error('Supabase operation failed', e);
+        LogUtils.log('DETAILS', 'Code: $errorCode, Message: $errorMessage');
+        if (errorDetails != null) LogUtils.log('DETAILS', 'Details: $errorDetails');
+        if (errorHint != null) LogUtils.log('DETAILS', 'Hint: $errorHint');
+        
+        // Set user-friendly error message
+        _error = _getUserFriendlyError(errorCode, errorMessage);
       } else {
-        debugPrint('REPOSITORY: Operation error: $e');
-        _error = '$errorMessage: ${e.toString()}';
+        // Log general error
+        LogUtils.error('Operation error: $errorMessage', e);
+        _error = errorMessage;
       }
-      
-      if (defaultValue != null) return defaultValue;
-      rethrow;
+      return defaultValue;
     }
   }
 
   Future<void> _clearLocalData() async {
-    debugPrint('🗑️ Clearing local data after migration...');
+    LogUtils.info('🗑️ Clearing local data after migration...');
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('pallets');
     await prefs.remove('tags');
     await prefs.remove('palletIdCounter');
     await prefs.remove('itemIdCounter');
-    debugPrint('✅ Local data cleared successfully');
+    LogUtils.info('✅ Local data cleared successfully');
   }
 
   Future<void> _savePalletsToSupabase(List<Pallet> pallets) async {
@@ -713,7 +716,7 @@ class DataRepository with ChangeNotifier {
                 'is_closed': pallet.isClosed,
               })
               .eq('id', pallet.supabaseId);
-            debugPrint('REPOSITORY: Updated pallet using supabaseId: ${pallet.supabaseId}');
+            LogUtils.info('REPOSITORY: Updated pallet using supabaseId: ${pallet.supabaseId}');
           } else {
             // Fall back to using original_id
             await SupabaseService.instance.client
@@ -727,7 +730,7 @@ class DataRepository with ChangeNotifier {
               })
               .eq('original_id', pallet.id)
               .eq('user_id', SupabaseService.instance.currentUser!.id);
-            debugPrint('REPOSITORY: Updated pallet using original_id: ${pallet.id}');
+            LogUtils.info('REPOSITORY: Updated pallet using original_id: ${pallet.id}');
           }
         }
       },
@@ -756,7 +759,7 @@ class DataRepository with ChangeNotifier {
           // Find the pallet first to get the supabaseId
           final pallet = await _findPalletById(palletId);
           if (pallet == null) {
-            debugPrint('REPOSITORY: Cannot find pallet with ID $palletId');
+            LogUtils.warning('REPOSITORY: Cannot find pallet with ID $palletId');
             return;
           }
           
@@ -781,7 +784,7 @@ class DataRepository with ChangeNotifier {
               .update(updateData)
               .eq('pallet_id', pallet.supabaseId)
               .eq('original_id', item.id);
-            debugPrint('REPOSITORY: Updated item using pallet supabaseId: ${pallet.supabaseId}');
+            LogUtils.info('REPOSITORY: Updated item using pallet supabaseId: ${pallet.supabaseId}');
           } else {
             // First find the Supabase pallet ID
             final response = await SupabaseService.instance.client
@@ -799,7 +802,7 @@ class DataRepository with ChangeNotifier {
               .update(updateData)
               .eq('pallet_id', supabasePalletId)
               .eq('original_id', item.id);
-            debugPrint('REPOSITORY: Updated item using pallet original_id: $palletId');
+            LogUtils.info('REPOSITORY: Updated item using pallet original_id: $palletId');
           }
         }
       },
@@ -811,7 +814,7 @@ class DataRepository with ChangeNotifier {
   Future<void> resetMigrationStatus() async {
     await _performOperation(
       operation: () async {
-        debugPrint('Resetting migration status for new user');
+        LogUtils.info('Resetting migration status for new user');
         _hasMigratedData = false;
         _dataSource = DataSource.sharedPreferences;
         _isInitialized = true;
@@ -821,7 +824,7 @@ class DataRepository with ChangeNotifier {
         await prefs.setBool('has_migrated_data', false);
         
         notifyListeners();
-        debugPrint('Migration status reset completed');
+        LogUtils.info('Migration status reset completed');
       },
       errorMessage: 'Failed to reset migration status',
     );
@@ -831,7 +834,7 @@ class DataRepository with ChangeNotifier {
   Future<void> forceDataReload() async {
     await _performOperation(
       operation: () async {
-        debugPrint('Forcing data reload from ${_dataSource.toString()}');
+        LogUtils.info('Forcing data reload from ${_dataSource.toString()}');
         
         // Check migration status from SharedPreferences
         final prefs = await SharedPreferences.getInstance();
@@ -842,21 +845,21 @@ class DataRepository with ChangeNotifier {
           try {
             // Check if the user has data in Supabase
             final pallets = await SupabaseService.instance.getPallets();
-            debugPrint('Found ${pallets.length} pallets in Supabase during force reload');
+            LogUtils.info('Found ${pallets.length} pallets in Supabase during force reload');
             
             // If the user has data in Supabase but migration flag isn't set, update it
             if (pallets.isNotEmpty && !_hasMigratedData) {
-              debugPrint('User has data in Supabase but migration flag not set - updating flag');
+              LogUtils.info('User has data in Supabase but migration flag not set - updating flag');
               await prefs.setBool('has_migrated_data', true);
               _hasMigratedData = true;
             }
           } catch (e) {
-            debugPrint('Error checking Supabase data during force reload: $e');
+            LogUtils.error('Error checking Supabase data during force reload', e);
           }
         }
         
         notifyListeners();
-        debugPrint('Force reload completed - Migration status: $_hasMigratedData');
+        LogUtils.info('Force reload completed - Migration status: $_hasMigratedData');
       },
       errorMessage: 'Failed to force data reload',
     );
@@ -872,20 +875,20 @@ class DataRepository with ChangeNotifier {
   Future<List<Pallet>> loadPalletsFromSupabase() async {
     return _performOperation(
       operation: () async {
-        debugPrint('REPOSITORY-PUBLIC: Loading pallets directly from Supabase');
+        LogUtils.info('REPOSITORY-PUBLIC: Loading pallets directly from Supabase');
         if (SupabaseService.instance.currentUser == null) {
-          debugPrint('REPOSITORY-PUBLIC: Cannot load pallets from Supabase: User not authenticated');
+          LogUtils.warning('REPOSITORY-PUBLIC: Cannot load pallets from Supabase: User not authenticated');
           return [];
         }
         
-        debugPrint('REPOSITORY-PUBLIC: User authenticated, attempting to get pallets from Supabase');
+        LogUtils.info('REPOSITORY-PUBLIC: User authenticated, attempting to get pallets from Supabase');
         final pallets = await SupabaseService.instance.getPallets();
-        debugPrint('REPOSITORY-PUBLIC: Loaded ${pallets.length} pallets from Supabase');
+        LogUtils.info('REPOSITORY-PUBLIC: Loaded ${pallets.length} pallets from Supabase');
         
         // Log first pallet for debugging
         if (pallets.isNotEmpty) {
           final firstPallet = pallets.first;
-          debugPrint('REPOSITORY-PUBLIC: First pallet: ${firstPallet.name} with ${firstPallet.items.length} items');
+          LogUtils.info('REPOSITORY-PUBLIC: First pallet: ${firstPallet.name} with ${firstPallet.items.length} items');
         }
         
         return pallets;
@@ -899,16 +902,16 @@ class DataRepository with ChangeNotifier {
   Future<Pallet?> createPalletInSupabase(Pallet pallet) async {
     return _performOperation(
       operation: () async {
-        debugPrint('REPOSITORY: Creating pallet in Supabase: ${pallet.name}');
+        LogUtils.info('REPOSITORY: Creating pallet in Supabase: ${pallet.name}');
         if (SupabaseService.instance.currentUser == null) {
-          debugPrint('REPOSITORY: Cannot create pallet: User not authenticated');
+          LogUtils.warning('REPOSITORY: Cannot create pallet: User not authenticated');
           throw Exception('User must be authenticated to create pallet');
         }
         
         try {
           final response = await SupabaseService.instance.createPallet(pallet);
           final palletId = response['id'];
-          debugPrint('REPOSITORY: Created pallet in Supabase with ID: $palletId');
+          LogUtils.info('REPOSITORY: Created pallet in Supabase with ID: $palletId');
           
           // Create a copy of the pallet with the Supabase ID
           final createdPallet = Pallet(
@@ -924,8 +927,8 @@ class DataRepository with ChangeNotifier {
           
           return createdPallet;
         } catch (e) {
-          debugPrint('REPOSITORY: Error creating pallet in Supabase: $e');
-          debugPrint('REPOSITORY: Stack trace: ${StackTrace.current}');
+          LogUtils.error('REPOSITORY: Error creating pallet in Supabase', e);
+          LogUtils.error('REPOSITORY: Stack trace', null, StackTrace.current);
           return null;
         }
       },
@@ -938,9 +941,9 @@ class DataRepository with ChangeNotifier {
   Future<int?> createPalletItemInSupabase(PalletItem item, int palletId) async {
     return _performOperation(
       operation: () async {
-        debugPrint('REPOSITORY: Creating pallet item in Supabase for pallet $palletId');
+        LogUtils.info('REPOSITORY: Creating pallet item in Supabase for pallet $palletId');
         if (SupabaseService.instance.currentUser == null) {
-          debugPrint('REPOSITORY: Cannot create pallet item: User not authenticated');
+          LogUtils.warning('REPOSITORY: Cannot create pallet item: User not authenticated');
           throw Exception('User must be authenticated to create pallet item');
         }
         
@@ -968,9 +971,9 @@ class DataRepository with ChangeNotifier {
       // Restore migration flag
       await prefs.setBool('has_migrated_data', hasMigrated);
       
-      debugPrint('Local data cleared from SharedPreferences');
+      LogUtils.info('Local data cleared from SharedPreferences');
     } catch (e) {
-      debugPrint('Error clearing local data: $e');
+      LogUtils.error('Error clearing local data', e);
       rethrow;
     }
   }
@@ -982,9 +985,9 @@ class DataRepository with ChangeNotifier {
       await prefs.setBool('has_migrated_data', completed);
       _hasMigratedData = completed;
       notifyListeners();
-      debugPrint('Migration completed flag set to $completed in SharedPreferences');
+      LogUtils.info('Migration completed flag set to $completed in SharedPreferences');
     } catch (e) {
-      debugPrint('Error setting migration flag: $e');
+      LogUtils.error('Error setting migration flag', e);
       rethrow;
     }
   }

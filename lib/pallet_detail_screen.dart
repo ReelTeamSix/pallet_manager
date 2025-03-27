@@ -4,6 +4,7 @@ import 'pallet_model.dart';
 import 'responsive_utils.dart'; // Import responsive utilities
 import 'utils/dialog_utils.dart'; // Import dialog utilities
 import 'item_detail_screen.dart'; // Import item detail screen
+import 'package:pallet_manager/utils/log_utils.dart';
 
 class PalletDetailScreen extends StatefulWidget {
   final Pallet pallet;
@@ -34,10 +35,12 @@ class _PalletDetailScreenState extends State<PalletDetailScreen> {
       });
       
       try {
+        LogUtils.info('Loading items for pallet ${widget.pallet.id}');
         // Load items for this specific pallet
         await palletModel.loadPalletItems(widget.pallet.id);
+        LogUtils.info('Successfully loaded items for pallet ${widget.pallet.id}');
       } catch (e) {
-        debugPrint('Error loading pallet items: $e');
+        LogUtils.error('Error loading pallet items', e);
       } finally {
         if (mounted) {
           setState(() {
@@ -896,12 +899,11 @@ class _PalletDetailScreenState extends State<PalletDetailScreen> {
 
   Future<bool?> _confirmDeleteItem(BuildContext context, PalletModel model,
       int palletId, PalletItem item) async {
-    return showDialog<bool>(
+    final result = await showDialog<bool>(
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: Text("Delete Item",
-              style: context.largeTextWeight(FontWeight.bold)),
+          title: Text("Delete Item", style: context.largeTextWeight(FontWeight.bold)),
           content: Text(
             "Are you sure you want to delete '${item.name}'?",
             style: context.mediumText,
@@ -914,7 +916,6 @@ class _PalletDetailScreenState extends State<PalletDetailScreen> {
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
               onPressed: () {
-                model.removeItemFromPallet(palletId, item.id);
                 Navigator.pop(context, true);
               },
               child: Text("DELETE", style: context.mediumText),
@@ -923,6 +924,13 @@ class _PalletDetailScreenState extends State<PalletDetailScreen> {
         );
       },
     );
+
+    if (result == true) {
+      LogUtils.info('Deleting item ${item.id} from pallet $palletId');
+      model.removeItemFromPallet(palletId, item.id);
+    }
+    
+    return result;
   }
 
   void _showAddItemDialog(BuildContext context, Pallet pallet) {

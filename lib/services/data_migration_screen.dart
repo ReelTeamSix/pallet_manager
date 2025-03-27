@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:pallet_manager/pallet_model.dart';
 import 'package:pallet_manager/services/supabase_service.dart';
 import 'package:pallet_manager/services/data_repository.dart';
+import 'package:pallet_manager/utils/log_utils.dart';
 
 class DataMigrationScreen extends StatefulWidget {
   final PalletModel palletModel;
@@ -47,58 +48,54 @@ class _DataMigrationScreenState extends State<DataMigrationScreen> {
   }
 
   Future<void> _loadData() async {
-    if (_isDisposed || _isLoading || _dataLoaded) return;
+    LogUtils.info('DataMigrationScreen: Starting _loadData()');
     
-    debugPrint('DataMigrationScreen: Starting _loadData()');
-    
-    if (mounted) {
-      setState(() {
-        _isLoading = true;
-      });
-    }
+    setState(() {
+      _isLoading = true;
+    });
     
     try {
-      // Don't reload data, just use what we already have
-      // Loading the summary counts doesn't need to reload the entire model
-      if (_isDisposed) return;
+      // Get direct access to SharedPreferences data for analysis
+      final model = Provider.of<PalletModel>(context, listen: false);
+      final repository = Provider.of<DataRepository>(context, listen: false);
       
-      // Just calculate counts from the current state without reloading
-      final totalPallets = widget.palletModel.pallets.length;
-      final totalItems = widget.palletModel.pallets.fold<int>(
-        0,
-        (sum, pallet) => sum + pallet.items.length,
-      );
-      final totalTags = widget.savedTags.length;
+      // Get data without reloading from SharedPreferences
+      final pallets = model.pallets;
+      final tags = model.tags;
       
-      debugPrint('DataMigrationScreen: Calculated summary: $_totalPallets pallets, $_totalItems items, $_totalTags tags (without reloading)');
+      // Calculate summary
+      _totalPallets = pallets.length;
+      _totalItems = pallets.fold(0, (sum, pallet) => sum + pallet.items.length);
+      _totalTags = tags.length;
       
-      if (mounted) {
-        setState(() {
-          _totalPallets = totalPallets;
-          _totalItems = totalItems;
-          _totalTags = totalTags;
-          _isLoading = false;
-          _dataLoaded = true; // Mark data as loaded to prevent reload loops
-        });
+      LogUtils.info('DataMigrationScreen: Calculated summary: $_totalPallets pallets, $_totalItems items, $_totalTags tags (without reloading)');
+      
+      // Force reload original data from SharedPreferences if needed
+      if (_totalPallets == 0 && repository.dataSource == DataSource.sharedPreferences) {
+        // Try loading directly from SharedPreferences to get accurate count
+        await model.forceDataReload();
+        
+        // Recalculate
+        _totalPallets = model.pallets.length;
+        _totalItems = model.pallets.fold(0, (sum, pallet) => sum + pallet.items.length);
+        _totalTags = model.tags.length;
       }
       
-      // Log data counts for debugging
-      debugPrint('Migration screen loaded data: $_totalPallets pallets, $_totalItems items, $_totalTags tags');
+      LogUtils.info('Migration screen loaded data: $_totalPallets pallets, $_totalItems items, $_totalTags tags');
     } catch (e) {
-      debugPrint('DataMigrationScreen: Error loading data: $e');
-      if (!mounted || _isDisposed) return;
-      setState(() {
-        _errorMessage = 'Failed to load data: $e';
-        _isLoading = false;
-        _dataLoaded = true; // Even on error, mark as loaded to prevent loops
-      });
+      LogUtils.error('DataMigrationScreen: Error loading data', e);
+      _errorMessage = 'Error loading data: $e';
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
   Future<void> _startMigration() async {
-    if (_isDisposed || _isLoading) return;
-    
-    debugPrint('DataMigrationScreen: Starting migration process (manually triggered)');
+    LogUtils.info('DataMigrationScreen: Starting migration process (manually triggered)');
     
     if (mounted) {
       setState(() {
@@ -108,31 +105,31 @@ class _DataMigrationScreenState extends State<DataMigrationScreen> {
     }
 
     try {
-      // Verify user is authenticated
-      final supabaseService = SupabaseService.instance;
-      final currentUser = supabaseService.currentUser;
+      final repository = Provider.of<DataRepository>(context, listen: false);
       
-      if (currentUser == null) {
-        debugPrint('DataMigrationScreen: Migration failed - user not authenticated');
-        throw Exception('User must be logged in to migrate data');
+      if (!_authService.isAuthenticated) {
+        LogUtils.warning('DataMigrationScreen: Migration failed - user not authenticated');
+        if (mounted) {
+          setState(() {
+            _errorMessage = 'You must sign in before migrating data';
+            _isLoading = false;
+          });
+        }
+        return;
       }
-
-      // Add a small delay to ensure UI state is updated
-      await Future.delayed(const Duration(milliseconds: 100));
       
-      if (_isDisposed || !mounted) return;
-
-      // Use the simplified migration method from PalletModel
-      debugPrint('DataMigrationScreen: Starting data migration to Supabase...');
-      final success = await widget.palletModel.migrateDataToSupabase();
+      LogUtils.info('DataMigrationScreen: Starting data migration to Supabase...');
       
-      if (_isDisposed || !mounted) return;
+      final success = await repository.migrateDataToSupabase();
       
       if (success) {
-        debugPrint('DataMigrationScreen: ✅ Migration completed successfully');
-        // Ensure we force data reload to see the migrated data
-        debugPrint('DataMigrationScreen: Reloading data after successful migration');
-        await widget.palletModel.forceDataReload();
+        LogUtils.info('DataMigrationScreen: ✅ Migration completed successfully');
+        
+        LogUtils.info('DataMigrationScreen: Reloading data after successful migration');
+        
+        // Load migrated data from Supabase
+        final model = Provider.of<PalletModel>(context, listen: false);
+        await model.forceDataReload();
         
         if (mounted) {
           setState(() {
@@ -142,10 +139,10 @@ class _DataMigrationScreenState extends State<DataMigrationScreen> {
           
           // REMOVED: No longer automatically calling onMigrationComplete
           // The user will now need to explicitly tap the "Continue" button
-          debugPrint('DataMigrationScreen: Migration UI updated to show success state');
+          LogUtils.info('DataMigrationScreen: Migration UI updated to show success state');
         }
       } else {
-        debugPrint('DataMigrationScreen: ❌ Migration failed');
+        LogUtils.warning('DataMigrationScreen: ❌ Migration failed');
         if (mounted) {
           setState(() {
             _errorMessage = 'Migration failed. Please try again.';
@@ -154,7 +151,7 @@ class _DataMigrationScreenState extends State<DataMigrationScreen> {
         }
       }
     } catch (e) {
-      debugPrint('DataMigrationScreen: Migration error: $e');
+      LogUtils.error('DataMigrationScreen: Migration error', e);
       if (!mounted || _isDisposed) return;
       setState(() {
         _errorMessage = 'Migration failed: $e';
@@ -325,7 +322,7 @@ class _DataMigrationScreenState extends State<DataMigrationScreen> {
         ElevatedButton(
           onPressed: () {
             // Use stronger navigation to ensure we properly move to the home screen
-            debugPrint('Navigating away from migration screen to home');
+            LogUtils.info('Navigating away from migration screen to home');
             
             // First trigger the callback to update parent state
             widget.onMigrationComplete();
@@ -391,7 +388,7 @@ class _DataMigrationScreenState extends State<DataMigrationScreen> {
             const SizedBox(width: 16),
             TextButton(
               onPressed: () {
-                debugPrint('User chose to continue without migrating');
+                LogUtils.info('User chose to continue without migrating');
                 widget.onMigrationComplete();
                 
                 // Use a microtask to ensure the callback is processed first

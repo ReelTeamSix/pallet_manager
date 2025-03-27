@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:pallet_manager/pallet_model.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:pallet_manager/utils/log_utils.dart';
 
 class SupabaseService {
   static SupabaseService? _instance;
@@ -60,10 +61,10 @@ class SupabaseService {
       if (response.user != null) {
         // Update the user ID tracking
         updatePreviousUserId(response.user!.id);
-        debugPrint('User signed in: ${response.user!.id}');
+        LogUtils.info('User signed in: ${response.user!.id}');
       }
     } catch (e) {
-      debugPrint('Sign in error: $e');
+      LogUtils.error('Sign in error', e);
       rethrow;
     }
   }
@@ -78,10 +79,10 @@ class SupabaseService {
       if (response.user != null) {
         // Update the user ID tracking for the new user
         updatePreviousUserId(response.user!.id);
-        debugPrint('User signed up: ${response.user!.id}');
+        LogUtils.info('User signed up: ${response.user!.id}');
       }
     } catch (e) {
-      debugPrint('Sign up error: $e');
+      LogUtils.error('Sign up error', e);
       rethrow;
     }
   }
@@ -95,10 +96,10 @@ class SupabaseService {
       // Set flag that user has changed
       if (oldUserId != null) {
         setUserChanged(true);
-        debugPrint('User signed out: $oldUserId, userChanged flag set to true');
+        LogUtils.info('User signed out: $oldUserId, userChanged flag set to true');
       }
     } catch (e) {
-      debugPrint('Sign out error: $e');
+      LogUtils.error('Sign out error', e);
       rethrow;
     }
   }
@@ -112,7 +113,7 @@ class SupabaseService {
         'created_at': DateTime.now().toIso8601String(),
       });
     } catch (e) {
-      debugPrint('Create user profile error: $e');
+      LogUtils.error('Create user profile error', e);
     }
   }
 
@@ -134,27 +135,26 @@ class SupabaseService {
 
       return response;
     } catch (e) {
-      debugPrint('Create pallet error: $e');
+      LogUtils.error('Create pallet error', e);
       rethrow;
     }
   }
 
   Future<int?> createPalletItem(PalletItem item, int palletId) async {
     if (currentUser == null) {
-      debugPrint('SUPABASE-ITEM: Cannot create pallet item - user not authenticated');
+      LogUtils.warning('Cannot create pallet item - user not authenticated');
       throw Exception('User must be authenticated to create pallet item');
     }
 
     try {
-      debugPrint('SUPABASE-ITEM: Creating pallet item ${item.id} for pallet $palletId');
+      LogUtils.info('Creating pallet item ${item.id} for pallet $palletId');
       
       // Prepare data for insertion with correct schema column names
+      // Only include fields that actually exist in the database schema
       final data = {
         'pallet_id': palletId,
         'original_id': item.id,
         'name': item.name,
-        'description': item.name, // Use name as description 
-        'purchase_price': item.allocatedCost,
         'sale_price': item.salePrice,
         'is_sold': item.isSold,
         'sale_date': item.saleDate?.toIso8601String(),
@@ -163,14 +163,10 @@ class SupabaseService {
         'condition': item.condition,
         'list_price': item.listPrice,
         'product_code': item.productCode,
-        'quantity': 1, // Default quantity
-        'category': '', // Default empty category
-        'date_purchased': DateTime.now().toIso8601String(),
-        'location': '', // Default empty location
         'user_id': currentUser!.id,
       };
       
-      debugPrint('SUPABASE-ITEM: Data for insertion: $data');
+      LogUtils.debug('Data for insertion: $data');
 
       final response = await _supabase
           .from('pallet_items')
@@ -178,11 +174,10 @@ class SupabaseService {
           .select('id')
           .single();
 
-      debugPrint('SUPABASE-ITEM: Successfully created pallet item with ID: ${response['id']}');
+      LogUtils.info('Successfully created pallet item with ID: ${response['id']}');
       return response['id'];
     } catch (e) {
-      debugPrint('SUPABASE-ITEM: Error creating pallet item: $e');
-      debugPrint('SUPABASE-ITEM: Stack trace: ${StackTrace.current}');
+      LogUtils.error('Error creating pallet item', e, StackTrace.current);
       rethrow;
     }
   }
@@ -201,29 +196,29 @@ class SupabaseService {
 
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
-      debugPrint('Get pallet items error: $e');
+      LogUtils.error('Get pallet items error', e);
       rethrow;
     }
   }
 
   Future<List<Pallet>> getPallets() async {
     if (currentUser == null) {
-      debugPrint('SUPABASE-GET: Cannot get pallets - user not authenticated');
+      LogUtils.warning('Cannot get pallets - user not authenticated');
       throw Exception('User must be authenticated to get pallets');
     }
 
     try {
-      debugPrint('SUPABASE-GET: Retrieving pallets for user ${currentUser!.id}');
+      LogUtils.info('Retrieving pallets for user ${currentUser!.id}');
       final response = await _supabase
         .from('pallets')
         .select('*, pallet_items(*)')
         .eq('user_id', currentUser!.id)
         .order('date', ascending: false);
 
-      debugPrint('SUPABASE-GET: Retrieved ${response.length} pallets from Supabase');
+      LogUtils.info('Retrieved ${response.length} pallets from Supabase');
       
       if (response.isEmpty) {
-        debugPrint('SUPABASE-GET: No pallets found for user ${currentUser!.id}');
+        LogUtils.info('No pallets found for user ${currentUser!.id}');
         return [];
       }
       
@@ -232,7 +227,7 @@ class SupabaseService {
       
       for (final json in response) {
         final originalId = json['original_id'] as int;
-        debugPrint('SUPABASE-GET: Processing pallet with original_id=$originalId, db_id=${json['id']}');
+        LogUtils.info('Processing pallet with original_id=$originalId, db_id=${json['id']}');
         
         // If this is the first time we see this originalId, store the pallet
         if (!palletMap.containsKey(originalId)) {
@@ -247,22 +242,22 @@ class SupabaseService {
         
         // Add items from the duplicate pallet to the original one
         existingItems.addAll(newItems);
-        debugPrint('SUPABASE-GET: Merged items for duplicate pallet ${json['id']}');
+        LogUtils.info('Merged items for duplicate pallet ${json['id']}');
       }
       
-      debugPrint('SUPABASE-GET: After deduplication, found ${palletMap.length} unique pallets');
+      LogUtils.info('After deduplication, found ${palletMap.length} unique pallets');
       
       // Convert the deduplicated map back to a list of Pallets
       final pallets = palletMap.values.map((json) {
         final pallet = _palletFromJson(json);
-        debugPrint('SUPABASE-GET: Converted pallet ${pallet.id} with ${pallet.items.length} items');
+        LogUtils.info('Converted pallet ${pallet.id} with ${pallet.items.length} items');
         return pallet;
       }).toList();
       
       return pallets;
     } catch (e) {
-      debugPrint('SUPABASE-GET: Error getting pallets: $e');
-      debugPrint('SUPABASE-GET: Stack trace: ${StackTrace.current}');
+      LogUtils.error('Error getting pallets', e);
+      LogUtils.debug('Stack trace: ${StackTrace.current}');
       rethrow;
     }
   }
@@ -280,7 +275,7 @@ class SupabaseService {
 
       return response.map((json) => json['name'] as String).toSet();
     } catch (e) {
-      debugPrint('Get tags error: $e');
+      LogUtils.error('Get tags error', e);
       rethrow;
     }
   }
@@ -297,7 +292,7 @@ class SupabaseService {
         'created_at': DateTime.now().toIso8601String(),
       });
     } catch (e) {
-      debugPrint('Create tag error: $e');
+      LogUtils.error('Create tag error', e);
       rethrow;
     }
   }
@@ -314,7 +309,7 @@ class SupabaseService {
         .eq('name', tag)
         .eq('user_id', currentUser!.id);
     } catch (e) {
-      debugPrint('Delete tag error: $e');
+      LogUtils.error('Delete tag error', e);
       rethrow;
     }
   }
@@ -325,7 +320,7 @@ class SupabaseService {
     }
 
     try {
-      debugPrint('Deleting pallet with original ID: $originalPalletId');
+      LogUtils.info('Deleting pallet with original ID: $originalPalletId');
       
       // Find the Supabase pallet ID that matches the original ID
       final response = await _supabase
@@ -335,18 +330,18 @@ class SupabaseService {
         .eq('user_id', currentUser!.id);
       
       if (response.isEmpty) {
-        debugPrint('No pallet found with original ID: $originalPalletId');
+        LogUtils.info('No pallet found with original ID: $originalPalletId');
         return;
       }
       
       // Extract all Supabase pallet IDs that match this original ID
       // (in case of duplicates)
       final palletIds = response.map((row) => row['id']).toList();
-      debugPrint('Found ${palletIds.length} pallets with original ID: $originalPalletId');
+      LogUtils.info('Found ${palletIds.length} pallets with original ID: $originalPalletId');
       
       // Delete each pallet (cascade should handle items)
       for (final palletId in palletIds) {
-        debugPrint('Deleting pallet ID: $palletId');
+        LogUtils.info('Deleting pallet ID: $palletId');
         await _supabase
           .from('pallets')
           .delete()
@@ -354,9 +349,9 @@ class SupabaseService {
           .eq('user_id', currentUser!.id);
       }
       
-      debugPrint('Successfully deleted all pallets with original ID: $originalPalletId');
+      LogUtils.info('Successfully deleted all pallets with original ID: $originalPalletId');
     } catch (e) {
-      debugPrint('Delete pallet error: $e');
+      LogUtils.error('Delete pallet error', e);
       rethrow;
     }
   }
@@ -367,7 +362,7 @@ class SupabaseService {
     }
 
     try {
-      debugPrint('Deleting item with original ID: $itemOriginalId from pallet with original ID: $palletOriginalId');
+      LogUtils.info('Deleting item with original ID: $itemOriginalId from pallet with original ID: $palletOriginalId');
       
       // First find the Supabase pallet ID
       final palletResponse = await _supabase
@@ -377,7 +372,7 @@ class SupabaseService {
         .eq('user_id', currentUser!.id);
       
       if (palletResponse.isEmpty) {
-        debugPrint('No pallet found with original ID: $palletOriginalId');
+        LogUtils.info('No pallet found with original ID: $palletOriginalId');
         return;
       }
       
@@ -393,9 +388,9 @@ class SupabaseService {
           .eq('original_id', itemOriginalId);
       }
       
-      debugPrint('Successfully deleted item with original ID: $itemOriginalId');
+      LogUtils.info('Successfully deleted item with original ID: $itemOriginalId');
     } catch (e) {
-      debugPrint('Delete pallet item error: $e');
+      LogUtils.error('Delete pallet item error', e);
       rethrow;
     }
   }
@@ -407,7 +402,7 @@ class SupabaseService {
     }
     
     try {
-      debugPrint('Starting cleanup of duplicate pallets');
+      LogUtils.info('Starting cleanup of duplicate pallets');
       
       // First, get all pallets grouped by original_id
       final response = await _supabase
@@ -436,7 +431,7 @@ class SupabaseService {
         final ids = entry.value;
         
         if (ids.length > 1) {
-          debugPrint('Found ${ids.length} duplicates for pallet with original_id: $originalId');
+          LogUtils.info('Found ${ids.length} duplicates for pallet with original_id: $originalId');
           
           // Keep the first one, delete the rest
           final keepId = ids.first;
@@ -461,9 +456,9 @@ class SupabaseService {
         }
       }
       
-      debugPrint('Cleanup complete. Removed $duplicatesRemoved duplicate pallets');
+      LogUtils.info('Cleanup complete. Removed $duplicatesRemoved duplicate pallets');
     } catch (e) {
-      debugPrint('Error during pallet cleanup: $e');
+      LogUtils.error('Error during pallet cleanup', e);
       rethrow;
     }
   }
@@ -474,7 +469,7 @@ class SupabaseService {
     }
     
     try {
-      debugPrint('Starting migration of ${pallets.length} pallets and ${savedTags.length} tags');
+      LogUtils.info('Starting migration of ${pallets.length} pallets and ${savedTags.length} tags');
       
       // Clean up any existing duplicate pallets
       await cleanupDuplicatePallets();
@@ -490,7 +485,7 @@ class SupabaseService {
         .map<int>((p) => p['original_id'] as int)
         .toSet();
         
-      debugPrint('Found ${existingOriginalIds.length} existing pallets in Supabase');
+      LogUtils.info('Found ${existingOriginalIds.length} existing pallets in Supabase');
       
       // Filter out pallets that already exist in Supabase
       final List<Pallet> newPallets = pallets
@@ -502,13 +497,13 @@ class SupabaseService {
         try {
           await createTag(tag);
         } catch (e) {
-          debugPrint('Error creating tag: $e - might already exist');
+          LogUtils.warning('Error creating tag: $e - might already exist');
           // Continue with next tag if this one fails
         }
       }
       
       // Add new pallets and their items
-      debugPrint('Migrating ${newPallets.length} new pallets to Supabase');
+      LogUtils.info('Migrating ${newPallets.length} new pallets to Supabase');
       for (final pallet in newPallets) {
         try {
           final palletResponse = await createPallet(pallet);
@@ -517,16 +512,16 @@ class SupabaseService {
           for (final item in pallet.items) {
             await createPalletItem(item, supabasePalletId);
           }
-          debugPrint('Migrated pallet ${pallet.id} with ${pallet.items.length} items');
+          LogUtils.info('Migrated pallet ${pallet.id} with ${pallet.items.length} items');
         } catch (e) {
-          debugPrint('Error migrating pallet ${pallet.id}: $e');
+          LogUtils.error('Error migrating pallet ${pallet.id}', e);
           // Continue with next pallet if this one fails
         }
       }
 
-      debugPrint('Data migration completed successfully');
+      LogUtils.info('Data migration completed successfully');
     } catch (e) {
-      debugPrint('Error during data migration: $e');
+      LogUtils.error('Error during data migration', e);
       rethrow;
     }
   }
@@ -577,7 +572,7 @@ class SupabaseService {
   
   void updatePreviousUserId(String userId) {
     if (_previousUserId != userId) {
-      debugPrint('Updating previous user ID from $_previousUserId to $userId');
+      LogUtils.info('Updating previous user ID from $_previousUserId to $userId');
       _previousUserId = userId;
     }
   }
@@ -593,22 +588,22 @@ class SupabaseService {
   // Get pallet headers only (without items) for lazy loading
   Future<List<Pallet>> getPalletHeaders() async {
     if (currentUser == null) {
-      debugPrint('SUPABASE-GET: Cannot get pallet headers - user not authenticated');
+      LogUtils.warning('Cannot get pallet headers - user not authenticated');
       throw Exception('User must be authenticated to get pallet headers');
     }
 
     try {
-      debugPrint('SUPABASE-GET: Retrieving pallet headers for user ${currentUser!.id}');
+      LogUtils.info('Retrieving pallet headers for user ${currentUser!.id}');
       final response = await _supabase
         .from('pallets')
         .select('id, original_id, name, tag, date, total_cost, is_closed')
         .eq('user_id', currentUser!.id)
         .order('date', ascending: false);
 
-      debugPrint('SUPABASE-GET: Retrieved ${response.length} pallet headers from Supabase');
+      LogUtils.info('Retrieved ${response.length} pallet headers from Supabase');
       
       if (response.isEmpty) {
-        debugPrint('SUPABASE-GET: No pallet headers found for user ${currentUser!.id}');
+        LogUtils.info('No pallet headers found for user ${currentUser!.id}');
         return [];
       }
       
@@ -626,11 +621,11 @@ class SupabaseService {
         );
       }).toList();
       
-      debugPrint('SUPABASE-GET: Converted ${pallets.length} pallet headers');
+      LogUtils.info('Converted ${pallets.length} pallet headers');
       return pallets;
     } catch (e) {
-      debugPrint('SUPABASE-GET: Error getting pallet headers: $e');
-      debugPrint('SUPABASE-GET: Stack trace: ${StackTrace.current}');
+      LogUtils.error('Error getting pallet headers', e);
+      LogUtils.debug('Stack trace: ${StackTrace.current}');
       rethrow;
     }
   }
@@ -638,12 +633,12 @@ class SupabaseService {
   // Get items for a specific pallet by pallet ID
   Future<List<PalletItem>> getPalletItemsById(int palletId) async {
     if (currentUser == null) {
-      debugPrint('SUPABASE-GET-ITEMS: Cannot get pallet items - user not authenticated');
+      LogUtils.warning('Cannot get pallet items - user not authenticated');
       throw Exception('User must be authenticated to get pallet items');
     }
 
     try {
-      debugPrint('SUPABASE-GET-ITEMS: Finding Supabase ID for pallet with original_id: $palletId');
+      LogUtils.info('Finding Supabase ID for pallet with original_id: $palletId');
       
       // Find the Supabase pallet ID first
       final palletResponse = await _supabase
@@ -654,12 +649,12 @@ class SupabaseService {
         .single();
       
       if (palletResponse == null) {
-        debugPrint('SUPABASE-GET-ITEMS: No pallet found with original_id: $palletId');
+        LogUtils.info('No pallet found with original_id: $palletId');
         return [];
       }
       
       final supabasePalletId = palletResponse['id'];
-      debugPrint('SUPABASE-GET-ITEMS: Found Supabase ID: $supabasePalletId for pallet: $palletId');
+      LogUtils.info('Found Supabase ID: $supabasePalletId for pallet: $palletId');
       
       // Get items for this pallet
       final itemsResponse = await _supabase
@@ -668,7 +663,7 @@ class SupabaseService {
         .eq('pallet_id', supabasePalletId)
         .eq('user_id', currentUser!.id);
       
-      debugPrint('SUPABASE-GET-ITEMS: Retrieved ${itemsResponse.length} items for pallet $palletId');
+      LogUtils.info('Retrieved ${itemsResponse.length} items for pallet $palletId');
       
       // Convert to PalletItem objects
       final items = itemsResponse.map((item) => PalletItem(
@@ -697,11 +692,11 @@ class SupabaseService {
             : null,
       )).toList();
       
-      debugPrint('SUPABASE-GET-ITEMS: Converted ${items.length} items for pallet $palletId');
+      LogUtils.info('Converted ${items.length} items for pallet $palletId');
       return items;
     } catch (e) {
-      debugPrint('SUPABASE-GET-ITEMS: Error getting items for pallet $palletId: $e');
-      debugPrint('SUPABASE-GET-ITEMS: Stack trace: ${StackTrace.current}');
+      LogUtils.error('Error getting items for pallet $palletId', e);
+      LogUtils.debug('Stack trace: ${StackTrace.current}');
       return []; // Return empty list on error
     }
   }

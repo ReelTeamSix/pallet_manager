@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:pallet_manager/services/data_repository.dart';
 import 'package:pallet_manager/services/supabase_service.dart';
 import 'dart:math';
+import 'package:pallet_manager/utils/log_utils.dart';
 
 class PalletItem {
   int id;
@@ -337,78 +338,74 @@ class PalletModel extends ChangeNotifier {
   
   // Method to explicitly initialize the model after widgets are built
   Future<void> initialize() async {
-    if (_isLoading) return;
-
-    _isLoading = true;
-    notifyListeners();
-    
     try {
-      debugPrint('MODEL: Initializing PalletModel');
-      await forceDataReload();
-      debugPrint('MODEL: PalletModel initialization complete');
+      LogUtils.info('MODEL: Initializing PalletModel');
+      await loadData();
+      LogUtils.info('MODEL: PalletModel initialization complete');
     } catch (e) {
-      debugPrint('MODEL: Error initializing PalletModel: $e');
-    } finally {
-      _isLoading = false;
-      notifyListeners();
+      LogUtils.error('MODEL: Error initializing PalletModel', e);
+      rethrow;
     }
   }
 
-  // Force a reload of data from the repository
+  // Force a reload of data from the repository - consolidated notify calls
   Future<void> forceDataReload() async {
     if (_isLoading) {
-      debugPrint('MODEL: Already loading data, skipping redundant forceDataReload() call');
+      LogUtils.warning('MODEL: Already loading data, skipping redundant forceDataReload() call');
       return;
     }
-    
-    debugPrint('MODEL: Forcing data reload from ${_dataRepository.dataSource}');
-    
+
     _isLoading = true;
-    // Only notify at the beginning and end of the operation to reduce UI rebuilds
-    notifyListeners();
-    
+    notifyListeners(); // Notify only once at the beginning
+
     try {
-      await loadData();
-      // Clear the loaded items tracking when forcing reload
-      _loadedPalletItems.clear();
+      LogUtils.info('MODEL: Forcing data reload from ${_dataRepository.dataSource}');
+      await _dataRepository.forceDataReload();
+      await loadData(notifyOnStart: false); // Skip notification at start since we already notified
     } catch (e) {
-      debugPrint('MODEL: Error in forceDataReload: $e');
+      LogUtils.error('MODEL: Error in forceDataReload', e);
     } finally {
       _isLoading = false;
-      notifyListeners();
+      notifyListeners(); // Notify only once at the end
     }
   }
 
-  // Load data from the repository with optional lazy loading for items
-  Future<void> loadData() async {
-    debugPrint('MODEL: Loading data from ${_dataRepository.dataSource}');
+  // Load data from repository with optimized notifications
+  Future<void> loadData({bool lazyLoadItems = true, bool notifyOnStart = true}) async {
+    LogUtils.info('MODEL: Loading data from ${_dataRepository.dataSource}');
     
+    if (notifyOnStart) {
+      _isLoading = true;
+      notifyListeners();
+    } else {
+      _isLoading = true;
+    }
+
     try {
-      // Load pallets from the current data source
-      if (_dataRepository.dataSource == DataSource.supabase) {
-        // For Supabase, load pallets with lazy loading for items
-        _pallets = await _dataRepository.loadPallets(lazyLoadItems: true);
-        debugPrint('MODEL: Loaded ${_pallets.length} pallets with lazy loading');
+      // Load pallets - with lazy loading, we only get the headers first
+      _pallets = await _dataRepository.loadPallets(lazyLoadItems: lazyLoadItems);
+      
+      if (lazyLoadItems) {
+        LogUtils.info('MODEL: Loaded ${_pallets.length} pallets with lazy loading');
       } else {
-        // For SharedPreferences, load all data at once
-        _pallets = await _dataRepository.loadPallets();
-        debugPrint('MODEL: Loaded ${_pallets.length} pallets from SharedPreferences');
+        LogUtils.info('MODEL: Loaded ${_pallets.length} pallets with all items');
       }
-      
-      // Load tags from the current data source
+
+      // Load tags
       _savedTags = await _dataRepository.loadTags();
-      debugPrint('MODEL: Loaded ${_savedTags.length} tags');
-      
-      // Load counters from SharedPreferences (only used for local data)
-      final counters = await _dataRepository.loadCounters();
-      _palletIdCounter = counters['palletIdCounter'] ?? 1;
-      _itemIdCounter = counters['itemIdCounter'] ?? 1;
-      
-      // Update the highest IDs if needed
-      _updateHighestIds();
+      LogUtils.info('MODEL: Loaded ${_savedTags.length} tags');
+
+      // Only load counters from SharedPreferences
+      if (_dataRepository.dataSource == DataSource.sharedPreferences) {
+        final counters = await _dataRepository.loadCounters();
+        _palletIdCounter = counters['palletIdCounter'] ?? 1;
+        _itemIdCounter = counters['itemIdCounter'] ?? 1;
+      }
     } catch (e) {
-      debugPrint('MODEL: Error loading data: $e');
-      throw e; // Rethrow to allow caller to handle
+      LogUtils.error('MODEL: Error loading data', e);
+    } finally {
+      _isLoading = false;
+      notifyListeners(); // Single notification at the end
     }
   }
 
@@ -422,90 +419,77 @@ class PalletModel extends ChangeNotifier {
             _pallets.expand((p) => p.items.isEmpty ? [0] : p.items.map((i) => i.id)).reduce(max) + 1);
       }
       
-      debugPrint('MODEL: Updated counters: palletIdCounter=$_palletIdCounter, itemIdCounter=$_itemIdCounter');
+      LogUtils.info('MODEL: Updated counters: palletIdCounter=$_palletIdCounter, itemIdCounter=$_itemIdCounter');
     }
   }
 
   // Load items for a specific pallet (for lazy loading)
   Future<void> loadPalletItems(int palletId) async {
-    if (_dataRepository.dataSource != DataSource.supabase) {
-      // Not needed for SharedPreferences mode
+    // Check if this pallet already has its items loaded
+    final palletIndex = _pallets.indexWhere((p) => p.id == palletId);
+    if (palletIndex == -1) {
+      LogUtils.warning('MODEL: Cannot find pallet $palletId to load items');
       return;
     }
-    
-    if (_loadedPalletItems[palletId] == true) {
-      // Items already loaded
-      debugPrint('MODEL: Items for pallet $palletId already loaded, skipping');
+
+    final pallet = _pallets[palletIndex];
+    if (pallet.items.isNotEmpty) {
+      LogUtils.info('MODEL: Items for pallet $palletId already loaded, skipping');
       return;
     }
-    
-    debugPrint('MODEL: Lazy loading items for pallet $palletId');
-    
+
+    LogUtils.info('MODEL: Lazy loading items for pallet $palletId');
+
     try {
-      final palletIndex = _pallets.indexWhere((p) => p.id == palletId);
-      if (palletIndex < 0) {
-        debugPrint('MODEL: Cannot find pallet $palletId to load items');
-        return;
-      }
-      
-      // Load items for this pallet
-      final pallet = _pallets[palletIndex];
       final items = await _dataRepository.loadPalletItems(palletId);
-      
-      // Update the pallet with the loaded items
-      pallet.items = items;
-      _loadedPalletItems[palletId] = true;
-      
-      debugPrint('MODEL: Loaded ${items.length} items for pallet $palletId');
-      notifyListeners();
+      if (palletIndex >= 0 && palletIndex < _pallets.length) {
+        // Update the pallet with its items
+        final updatedPallet = _pallets[palletIndex].copyWith(items: items);
+        _pallets[palletIndex] = updatedPallet;
+        notifyListeners();
+        LogUtils.info('MODEL: Loaded ${items.length} items for pallet $palletId');
+      }
     } catch (e) {
-      debugPrint('MODEL: Error loading items for pallet $palletId: $e');
+      LogUtils.error('MODEL: Error loading items for pallet $palletId', e);
     }
   }
 
   // Save data to the repository - optimized to reduce notifyListeners calls
   Future<void> saveData() async {
     if (_dataRepository.dataSource == DataSource.sharedPreferences) {
-      debugPrint('MODEL: Saving all data to SharedPreferences');
-      
+      LogUtils.info('MODEL: Saving all data to SharedPreferences');
       try {
-        // Save pallets
         await _dataRepository.savePallets(_pallets);
-        
-        // Save tags
         await _dataRepository.saveTags(_savedTags);
-        
-        // Save counters
-        await _dataRepository.saveCounters(_palletIdCounter, _itemIdCounter);
-        
-        debugPrint('MODEL: All data saved successfully');
+        await _saveCounters();
+  
+        // Save tags for auto-complete
+        _refreshTags();
+  
+        LogUtils.info('MODEL: All data saved successfully');
       } catch (e) {
-        debugPrint('MODEL: Error saving data: $e');
+        LogUtils.error('MODEL: Error saving data', e);
       }
     } else {
-      debugPrint('MODEL: Not saving to SharedPreferences because dataSource is ${_dataRepository.dataSource}');
+      LogUtils.info('MODEL: Not saving to SharedPreferences because dataSource is ${_dataRepository.dataSource}');
     }
   }
   
   // Reset all data when switching users
   Future<void> clearAllData() async {
-    debugPrint('MODEL: Clearing all data from PalletModel');
-    
-    _isLoading = true;
-    notifyListeners();
-    
+    LogUtils.info('MODEL: Clearing all data from PalletModel');
     try {
-      // Reset in-memory state
       _pallets = [];
       _savedTags = {};
       _palletIdCounter = 1;
       _itemIdCounter = 1;
-      _loadedPalletItems.clear();
-    } catch (e) {
-      debugPrint('MODEL: Error clearing data: $e');
-    } finally {
       _isLoading = false;
+      
+      await _dataRepository.clearLocalData();
+      
       notifyListeners();
+    } catch (e) {
+      LogUtils.error('MODEL: Error clearing data', e);
     }
   }
 
@@ -530,38 +514,36 @@ class PalletModel extends ChangeNotifier {
   }
 
   // Optimize removePallet method
-  void removePallet(int palletId) {
-    debugPrint('MODEL: Called removePallet for palletId: $palletId');
+  void removePallet(int palletId) async {
+    LogUtils.info('MODEL: Called removePallet for palletId: $palletId');
     
     final palletIndex = _pallets.indexWhere((p) => p.id == palletId);
-    if (palletIndex < 0) {
-      debugPrint('MODEL: Pallet not found in list');
+    if (palletIndex == -1) {
+      LogUtils.warning('MODEL: Pallet not found in list');
       return;
     }
-
+    
     final pallet = _pallets[palletIndex];
     
-    // Remove from local list first for UI responsiveness
+    // Remove from list first for immediate UI update
     _pallets.removeAt(palletIndex);
+    notifyListeners();
     
-    // Remove tracking for lazy loading
-    _loadedPalletItems.remove(palletId);
-    
-    if (_dataRepository.dataSource == DataSource.supabase) {
-      // For Supabase, notify UI immediately and then remove in background
-      notifyListeners();
+    // Then remove from storage
+    try {
+      if (_dataRepository.dataSource == DataSource.sharedPreferences) {
+        // For local storage, we need to save the entire list
+        await saveData();
+      } else {
+        // For Supabase, we can delete just this pallet
+        await _dataRepository.removePallet(pallet);
+        LogUtils.info('MODEL: Pallet successfully removed from Supabase');
+      }
+    } catch (e) {
+      LogUtils.error('MODEL: Error removing pallet from Supabase', e);
       
-      _dataRepository.removePallet(pallet).then((_) {
-        debugPrint('MODEL: Pallet successfully removed from Supabase');
-      }).catchError((e) {
-        debugPrint('MODEL: Error removing pallet from Supabase: $e');
-        // If error, add back to the list
-        _pallets.insert(palletIndex, pallet);
-        notifyListeners();
-      });
-    } else {
-      // For SharedPreferences, just save and notify
-      saveData();
+      // Add pallet back if there was an error
+      _pallets.insert(palletIndex, pallet);
       notifyListeners();
     }
   }
@@ -574,34 +556,40 @@ class PalletModel extends ChangeNotifier {
   }
 
   // Optimize removeItemFromPallet method
-  void removeItemFromPallet(int palletId, int itemId) {
+  void removeItemFromPallet(int palletId, int itemId) async {
+    // Find the pallet
     final palletIndex = _pallets.indexWhere((p) => p.id == palletId);
-    if (palletIndex < 0) return;
-
+    if (palletIndex == -1) return;
+    
     final pallet = _pallets[palletIndex];
     final itemIndex = pallet.items.indexWhere((item) => item.id == itemId);
-    if (itemIndex < 0) return;
+    if (itemIndex == -1) return;
     
-    // Remove from local list first
-    pallet.items.removeAt(itemIndex);
+    final item = pallet.items[itemIndex];
     
-    if (_dataRepository.dataSource == DataSource.supabase) {
-      // For Supabase, notify UI immediately and then remove in background
-      notifyListeners();
+    // Create a new pallet with the item removed
+    final updatedItems = List<PalletItem>.from(pallet.items)..removeAt(itemIndex);
+    final updatedPallet = pallet.copyWith(items: updatedItems);
+    
+    // Update UI
+    _pallets[palletIndex] = updatedPallet;
+    notifyListeners();
+    
+    // Update storage
+    try {
+      if (_dataRepository.dataSource == DataSource.sharedPreferences) {
+        // For local storage, just save everything
+        await saveData();
+      } else {
+        // For Supabase, we can delete just this item
+        await _dataRepository.removePalletItem(palletId, itemId);
+        LogUtils.info('MODEL: Item successfully removed from Supabase');
+      }
+    } catch (e) {
+      LogUtils.error('MODEL: Error removing item from Supabase', e);
       
-      _dataRepository.removePalletItem(palletId, itemId).then((_) {
-        debugPrint('MODEL: Item successfully removed from Supabase');
-      }).catchError((e) {
-        debugPrint('MODEL: Error removing item from Supabase: $e');
-        // If error, add back to the list
-        if (itemIndex >= 0 && itemIndex <= pallet.items.length) {
-          pallet.items.insert(itemIndex, PalletItem(id: itemId, name: 'Error: Item restore failed'));
-          notifyListeners();
-        }
-      });
-    } else {
-      // For SharedPreferences, just save and notify
-      saveData();
+      // Revert changes on error
+      _pallets[palletIndex] = pallet;
       notifyListeners();
     }
   }
@@ -772,184 +760,9 @@ class PalletModel extends ChangeNotifier {
     saveData();
   }
 
-  // Add a new pallet
-  void addPallet(Pallet pallet) {
-    if (_dataRepository.dataSource == DataSource.supabase) {
-      // In Supabase mode, add directly to the database
-      _dataRepository.addPallet(pallet).then((_) {
-        // Reload data after adding to ensure we have the latest from the server
-        loadData();
-      }).catchError((e) {
-        debugPrint('Error adding pallet to Supabase: $e');
-      });
-    } else {
-      // In SharedPreferences mode, add to local list and save
-      _pallets.add(pallet);
-      
-      // Add to saved tags if not empty
-      if (pallet.tag.isNotEmpty) {
-        _savedTags.add(pallet.tag);
-      }
-      
-      notifyListeners();
-      saveData();
-    }
-  }
-
-  // Mark an item as sold
-  void markItemAsSold(int palletId, int itemId, double salePrice) {
+  // Update addItemToPallet method to make it more efficient
+  Future<PalletItem> addItemToPallet(int palletId, String itemName) async {
     final palletIndex = _pallets.indexWhere((p) => p.id == palletId);
-    if (palletIndex < 0) return;
-
-    final pallet = _pallets[palletIndex];
-    final itemIndex = pallet.items.indexWhere((i) => i.id == itemId);
-    if (itemIndex < 0) return;
-
-    // Update the item locally
-    final item = pallet.items[itemIndex];
-    item.isSold = true;
-    item.salePrice = salePrice;
-    item.saleDate = DateTime.now();
-    
-    if (_dataRepository.dataSource == DataSource.supabase) {
-      // Use repository to update the item in Supabase
-      _dataRepository.updatePalletItem(
-        palletId, 
-        itemId, 
-        {
-          'is_sold': true,
-          'sale_price': salePrice,
-          'sale_date': DateTime.now().toIso8601String(),
-        },
-      ).catchError((e) {
-        debugPrint('Error marking item as sold in Supabase: $e');
-        // Revert change on error
-        item.isSold = false;
-        item.salePrice = 0;
-        item.saleDate = null;
-        notifyListeners();
-      });
-    }
-    
-    notifyListeners();
-    
-    // For SharedPreferences, we need to call saveData
-    if (_dataRepository.dataSource == DataSource.sharedPreferences) {
-      saveData();
-    }
-  }
-
-  // Mark a pallet as closed/sold
-  void markPalletAsSold(int palletId) {
-    final palletIndex = _pallets.indexWhere((p) => p.id == palletId);
-    if (palletIndex < 0) return;
-
-    // Update the pallet in the local list
-    _pallets[palletIndex].isClosed = true;
-    notifyListeners();
-
-    if (_dataRepository.dataSource == DataSource.supabase) {
-      // In Supabase mode, update the pallet in the database
-      try {
-        // Update through repository
-        _dataRepository.updatePallet(palletId, {'is_closed': true});
-      } catch (e) {
-        debugPrint('Error marking pallet as sold in Supabase: $e');
-      }
-    } else {
-      // In SharedPreferences mode, save the changes
-      saveData();
-    }
-  }
-
-  // Update pallet tag
-  void updatePalletTag(int palletId, String newTag) {
-    final palletIndex = _pallets.indexWhere((p) => p.id == palletId);
-    if (palletIndex < 0) return;
-
-    // Update the tag in the local list
-    _pallets[palletIndex].tag = newTag;
-    
-    // Add to saved tags if it's new
-    if (newTag.isNotEmpty) {
-      _savedTags.add(newTag);
-      _dataRepository.addTag(newTag);
-    }
-    
-    notifyListeners();
-
-    if (_dataRepository.dataSource == DataSource.supabase) {
-      // In Supabase mode, update the tag in the database
-      try {
-        // Update the pallet directly through the repository
-        _dataRepository.updatePallet(palletId, {'tag': newTag});
-      } catch (e) {
-        debugPrint('Error updating pallet tag in Supabase: $e');
-      }
-    } else {
-      // In SharedPreferences mode, save the changes
-      saveData();
-    }
-  }
-
-  // Update pallet name
-  void updatePalletName(int palletId, String newName) {
-    // Prevent duplicate names
-    if (newName.isEmpty ||
-        (_pallets.any((p) =>
-            p.id != palletId &&
-            p.name.toLowerCase() == newName.toLowerCase()))) {
-      return; // Reject the change - name is empty or already exists
-    }
-
-    final palletIndex = _pallets.indexWhere((p) => p.id == palletId);
-    if (palletIndex < 0) return;
-
-    // Update the name in the local list
-    _pallets[palletIndex].name = newName;
-    notifyListeners();
-
-    if (_dataRepository.dataSource == DataSource.supabase) {
-      // In Supabase mode, update the name in the database
-      try {
-        // Update the pallet directly through the repository
-        _dataRepository.updatePallet(palletId, {'name': newName});
-      } catch (e) {
-        debugPrint('Error updating pallet name in Supabase: $e');
-      }
-    } else {
-      // In SharedPreferences mode, save the changes
-      saveData();
-    }
-  }
-
-  // Add a new pallet
-  void addPallet(Pallet pallet) {
-    if (_dataRepository.dataSource == DataSource.supabase) {
-      // In Supabase mode, add directly to the database
-      _dataRepository.addPallet(pallet).then((_) {
-        // Reload data after adding to ensure we have the latest from the server
-        loadData();
-      }).catchError((e) {
-        debugPrint('Error adding pallet to Supabase: $e');
-      });
-    } else {
-      // In SharedPreferences mode, add to local list and save
-      _pallets.add(pallet);
-      
-      // Add to saved tags if not empty
-      if (pallet.tag.isNotEmpty) {
-        _savedTags.add(pallet.tag);
-      }
-      
-      notifyListeners();
-      saveData();
-    }
-  }
-
-  // Add an item to a pallet
-  PalletItem addItemToPallet(int palletId, String itemName) {
-    final palletIndex = pallets.indexWhere((p) => p.id == palletId);
     if (palletIndex < 0) {
       return PalletItem(id: -1, name: ""); // Return empty item if pallet not found
     }
@@ -961,23 +774,28 @@ class PalletModel extends ChangeNotifier {
       name: itemName,
     );
 
-    if (_dataRepository.dataSource == DataSource.supabase) {
-      // In Supabase mode, add to local list for immediate UI update
-      pallets[palletIndex].items.add(newItem);
-      notifyListeners();
-      
-      // Use the repository to add the item to Supabase
-      _dataRepository.addPalletItem(palletId, newItem).catchError((e) {
-        debugPrint('Error adding item to Supabase: $e');
-      });
-    } else {
-      // In SharedPreferences mode, add to local list and save
-      pallets[palletIndex].items.add(newItem);
-      notifyListeners();
-      saveData();
+    // Add to local list for immediate UI response regardless of data source
+    _pallets[palletIndex].items.add(newItem);
+    notifyListeners(); // Notify once for UI update
+    
+    try {
+      if (_dataRepository.dataSource == DataSource.supabase) {
+        // Use the repository to add the item to Supabase
+        await _dataRepository.addPalletItem(palletId, newItem);
+        LogUtils.info('MODEL: Added item to Supabase: $itemName (ID: $itemId)');
+      } else {
+        // For SharedPreferences, save all data
+        await saveData();
+      }
+    } catch (e) {
+      LogUtils.error('MODEL: Error adding item to Supabase', e);
+      // Remove the item from the local list on error
+      _pallets[palletIndex].items.removeWhere((item) => item.id == itemId);
+      notifyListeners(); // Notify again to update UI after error
+      return PalletItem(id: -1, name: ""); // Return empty item on failure
     }
 
-    return newItem; // Return the newly created item
+    return newItem; // Return the successfully created item
   }
 
   // Add this method to refresh tags from pallets

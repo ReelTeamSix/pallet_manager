@@ -6,6 +6,7 @@ import 'package:pallet_manager/services/supabase_service.dart';
 import 'package:provider/provider.dart';
 import 'package:pallet_manager/utils/test_data_generator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:pallet_manager/utils/log_utils.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({Key? key}) : super(key: key);
@@ -646,7 +647,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final supabaseService = SupabaseService.instance;
       await supabaseService.signOut();
       
-      debugPrint('Sign out successful, navigating to login screen');
+      LogUtils.info('Sign out successful, navigating to login screen');
       
       // Navigate away from settings screen
       Future.delayed(Duration.zero, () {
@@ -661,7 +662,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         }
       });
     } catch (e) {
-      debugPrint('Error signing out: $e');
+      LogUtils.error('Error signing out', e);
       
       // Close loading dialog if still open
       if (context.mounted && Navigator.of(context).canPop()) {
@@ -955,7 +956,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         );
       }
     } catch (e) {
-      debugPrint('Error during reset data: $e');
+      LogUtils.error('Error during reset data', e);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -993,7 +994,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           );
         }
       } catch (e) {
-        debugPrint('Error during migration check: $e');
+        LogUtils.error('Error during migration check', e);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
