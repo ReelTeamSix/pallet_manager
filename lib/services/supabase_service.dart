@@ -148,21 +148,26 @@ class SupabaseService {
     try {
       debugPrint('SUPABASE-ITEM: Creating pallet item ${item.id} for pallet $palletId');
       
-      // Prepare data for insertion, explicitly excluding 'photos' field
-      // which may not exist in the database schema
+      // Prepare data for insertion with correct schema column names
       final data = {
         'pallet_id': palletId,
         'original_id': item.id,
         'name': item.name,
-        'description': item.name, // Use name as description since description is not available
-        'purchase_price': item.allocatedCost, // Use allocatedCost as purchase price
-        'sale_price': item.salePrice ?? 0,
+        'description': item.name, // Use name as description 
+        'purchase_price': item.allocatedCost,
+        'sale_price': item.salePrice,
+        'is_sold': item.isSold,
+        'sale_date': item.saleDate?.toIso8601String(),
+        'allocated_cost': item.allocatedCost,
+        'retail_price': item.retailPrice,
+        'condition': item.condition,
+        'list_price': item.listPrice,
+        'product_code': item.productCode,
         'quantity': 1, // Default quantity
         'category': '', // Default empty category
-        'date_purchased': DateTime.now().toIso8601String(), // Default current date
+        'date_purchased': DateTime.now().toIso8601String(),
         'location': '', // Default empty location
         'user_id': currentUser!.id,
-        // Intentionally omitting 'photos' field to avoid schema errors
       };
       
       debugPrint('SUPABASE-ITEM: Data for insertion: $data');
@@ -532,11 +537,15 @@ class SupabaseService {
               id: item['original_id'] ?? 0,
               name: item['name'],
               salePrice: (item['sale_price'] as num).toDouble(),
-              isSold: item['is_sold'],
+              isSold: item['is_sold'] ?? false,
               saleDate: item['sale_date'] != null 
                   ? DateTime.parse(item['sale_date']) 
                   : null,
-              allocatedCost: (item['allocated_cost'] as num).toDouble(),
+              allocatedCost: (item['allocated_cost'] != null 
+                  ? (item['allocated_cost'] as num).toDouble() 
+                  : (item['purchase_price'] != null 
+                      ? (item['purchase_price'] as num).toDouble() 
+                      : 0.0)),
               retailPrice: item['retail_price'] != null 
                   ? (item['retail_price'] as num).toDouble() 
                   : null,
@@ -559,6 +568,7 @@ class SupabaseService {
       date: DateTime.parse(json['date']),
       items: items,
       isClosed: json['is_closed'] ?? false,
+      supabaseId: json['id']?.toString(),
     );
   }
 
@@ -578,5 +588,121 @@ class SupabaseService {
   
   bool hasUserChanged() {
     return _userChanged;
+  }
+
+  // Get pallet headers only (without items) for lazy loading
+  Future<List<Pallet>> getPalletHeaders() async {
+    if (currentUser == null) {
+      debugPrint('SUPABASE-GET: Cannot get pallet headers - user not authenticated');
+      throw Exception('User must be authenticated to get pallet headers');
+    }
+
+    try {
+      debugPrint('SUPABASE-GET: Retrieving pallet headers for user ${currentUser!.id}');
+      final response = await _supabase
+        .from('pallets')
+        .select('id, original_id, name, tag, date, total_cost, is_closed')
+        .eq('user_id', currentUser!.id)
+        .order('date', ascending: false);
+
+      debugPrint('SUPABASE-GET: Retrieved ${response.length} pallet headers from Supabase');
+      
+      if (response.isEmpty) {
+        debugPrint('SUPABASE-GET: No pallet headers found for user ${currentUser!.id}');
+        return [];
+      }
+      
+      // Convert to Pallet objects without items
+      final pallets = response.map((json) {
+        return Pallet(
+          id: json['original_id'] ?? 0,
+          name: json['name'],
+          tag: json['tag'] ?? '',
+          totalCost: (json['total_cost'] as num).toDouble(),
+          date: DateTime.parse(json['date']),
+          items: [], // Empty items list for lazy loading
+          isClosed: json['is_closed'] ?? false,
+          supabaseId: json['id']?.toString(),
+        );
+      }).toList();
+      
+      debugPrint('SUPABASE-GET: Converted ${pallets.length} pallet headers');
+      return pallets;
+    } catch (e) {
+      debugPrint('SUPABASE-GET: Error getting pallet headers: $e');
+      debugPrint('SUPABASE-GET: Stack trace: ${StackTrace.current}');
+      rethrow;
+    }
+  }
+
+  // Get items for a specific pallet by pallet ID
+  Future<List<PalletItem>> getPalletItemsById(int palletId) async {
+    if (currentUser == null) {
+      debugPrint('SUPABASE-GET-ITEMS: Cannot get pallet items - user not authenticated');
+      throw Exception('User must be authenticated to get pallet items');
+    }
+
+    try {
+      debugPrint('SUPABASE-GET-ITEMS: Finding Supabase ID for pallet with original_id: $palletId');
+      
+      // Find the Supabase pallet ID first
+      final palletResponse = await _supabase
+        .from('pallets')
+        .select('id')
+        .eq('original_id', palletId)
+        .eq('user_id', currentUser!.id)
+        .single();
+      
+      if (palletResponse == null) {
+        debugPrint('SUPABASE-GET-ITEMS: No pallet found with original_id: $palletId');
+        return [];
+      }
+      
+      final supabasePalletId = palletResponse['id'];
+      debugPrint('SUPABASE-GET-ITEMS: Found Supabase ID: $supabasePalletId for pallet: $palletId');
+      
+      // Get items for this pallet
+      final itemsResponse = await _supabase
+        .from('pallet_items')
+        .select('*')
+        .eq('pallet_id', supabasePalletId)
+        .eq('user_id', currentUser!.id);
+      
+      debugPrint('SUPABASE-GET-ITEMS: Retrieved ${itemsResponse.length} items for pallet $palletId');
+      
+      // Convert to PalletItem objects
+      final items = itemsResponse.map((item) => PalletItem(
+        id: item['original_id'] ?? 0,
+        name: item['name'],
+        salePrice: (item['sale_price'] as num).toDouble(),
+        isSold: item['is_sold'] ?? false,
+        saleDate: item['sale_date'] != null 
+            ? DateTime.parse(item['sale_date']) 
+            : null,
+        allocatedCost: (item['allocated_cost'] != null 
+            ? (item['allocated_cost'] as num).toDouble() 
+            : (item['purchase_price'] != null 
+                ? (item['purchase_price'] as num).toDouble() 
+                : 0.0)),
+        retailPrice: item['retail_price'] != null 
+            ? (item['retail_price'] as num).toDouble() 
+            : null,
+        condition: item['condition'],
+        listPrice: item['list_price'] != null 
+            ? (item['list_price'] as num).toDouble() 
+            : null,
+        productCode: item['product_code'],
+        photos: item['photos'] != null 
+            ? List<String>.from(item['photos']) 
+            : null,
+      )).toList();
+      
+      debugPrint('SUPABASE-GET-ITEMS: Converted ${items.length} items for pallet $palletId');
+      return items;
+    } catch (e) {
+      debugPrint('SUPABASE-GET-ITEMS: Error getting items for pallet $palletId: $e');
+      debugPrint('SUPABASE-GET-ITEMS: Stack trace: ${StackTrace.current}');
+      return []; // Return empty list on error
+    }
   }
 } 

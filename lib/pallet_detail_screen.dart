@@ -17,6 +17,36 @@ class PalletDetailScreen extends StatefulWidget {
 class _PalletDetailScreenState extends State<PalletDetailScreen> {
   // State to track if the info card is expanded or collapsed
   bool _isInfoCardExpanded = true;
+  bool _isLoadingItems = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPalletItemsIfNeeded();
+  }
+
+  Future<void> _loadPalletItemsIfNeeded() async {
+    final palletModel = Provider.of<PalletModel>(context, listen: false);
+    
+    if (palletModel.dataSource == DataSource.supabase) {
+      setState(() {
+        _isLoadingItems = true;
+      });
+      
+      try {
+        // Load items for this specific pallet
+        await palletModel.loadPalletItems(widget.pallet.id);
+      } catch (e) {
+        debugPrint('Error loading pallet items: $e');
+      } finally {
+        if (mounted) {
+          setState(() {
+            _isLoadingItems = false;
+          });
+        }
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -104,8 +134,17 @@ class _PalletDetailScreenState extends State<PalletDetailScreen> {
     Pallet pallet
   ) {
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Left panel with pallet info
+        Expanded(
+          flex: 3,
+          child: SingleChildScrollView(
+            padding: ResponsiveUtils.getPadding(context, PaddingType.medium),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildPalletInfoCard(pallet, false),
         // Left side - Pallet info and actions
         SizedBox(
           width: 320, // Fixed sidebar width
@@ -622,11 +661,37 @@ class _PalletDetailScreenState extends State<PalletDetailScreen> {
 
   Widget _buildItemsList(BuildContext context, PalletModel model, Pallet pallet,
       bool isNarrowScreen) {
+    if (_isLoadingItems) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('Loading items...', style: context.mediumText),
+          ],
+        ),
+      );
+    }
+    
     if (pallet.items.isEmpty) {
       return Center(
         child: Column(
-          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
+            Icon(
+              Icons.inventory_2_outlined,
+              size: ResponsiveUtils.getIconSize(context, IconSizeType.large),
+              color: Colors.grey,
+            ),
+            SizedBox(height: 16),
+            Text(
+              'No items in this pallet',
+              style: context.mediumText.copyWith(color: Colors.grey),
+            ),
+            SizedBox(height: 16),
+            ElevatedButton.icon(
+              onPressed: () {
             Icon(Icons.inventory_2_outlined,
                 size: ResponsiveUtils.getIconSize(context, IconSizeType.xLarge),
                 color: Colors.grey),

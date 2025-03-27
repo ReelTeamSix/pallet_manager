@@ -87,16 +87,73 @@ class DataRepository with ChangeNotifier {
 
   // PALLETS
 
-  // Load pallets from the current data source
-  Future<List<Pallet>> loadPallets() async {
+  // Load pallets from the repository
+  Future<List<Pallet>> loadPallets({bool lazyLoadItems = false}) async {
     return _performOperation(
       operation: () async {
         if (_dataSource == DataSource.sharedPreferences) {
+          // Local storage doesn't support lazy loading
           return _loadPalletsFromSharedPreferences();
+        } else {
+          return _loadPalletsFromSupabase(lazyLoadItems: lazyLoadItems);
         }
-        return _loadPalletsFromSupabase();
       },
       errorMessage: 'Failed to load pallets',
+      defaultValue: [],
+    );
+  }
+
+  // Load pallets from Supabase
+  Future<List<Pallet>> _loadPalletsFromSupabase({bool lazyLoadItems = false}) async {
+    debugPrint('REPOSITORY: Loading pallets from Supabase (lazyLoadItems=$lazyLoadItems)');
+    if (SupabaseService.instance.currentUser == null) {
+      debugPrint('REPOSITORY: Cannot load pallets from Supabase: User not authenticated');
+      return [];
+    }
+    
+    debugPrint('REPOSITORY: User authenticated, attempting to get pallets from Supabase');
+    try {
+      if (lazyLoadItems) {
+        // Only load pallet headers without items for better performance
+        final pallets = await SupabaseService.instance.getPalletHeaders();
+        debugPrint('REPOSITORY: Loaded ${pallets.length} pallet headers (lazy loading)');
+        return pallets;
+      } else {
+        // Load complete pallets with all items
+        final pallets = await SupabaseService.instance.getPallets();
+        debugPrint('REPOSITORY: Loaded ${pallets.length} pallets with items');
+        return pallets;
+      }
+    } catch (e) {
+      debugPrint('REPOSITORY: Error loading pallets from Supabase: $e');
+      return [];
+    }
+  }
+  
+  // Load items for a specific pallet (for lazy loading)
+  Future<List<PalletItem>> loadPalletItems(int palletId) async {
+    return _performOperation(
+      operation: () async {
+        if (_dataSource == DataSource.sharedPreferences) {
+          // For SharedPreferences, find the pallet and return its items
+          final pallets = await _loadPalletsFromSharedPreferences();
+          final pallet = pallets.firstWhere(
+            (p) => p.id == palletId, 
+            orElse: () => Pallet(
+              id: -1, 
+              name: 'Not Found', 
+              tag: '', 
+              totalCost: 0, 
+              date: DateTime.now()
+            ),
+          );
+          return pallet.id != -1 ? pallet.items : [];
+        } else {
+          // For Supabase, load items for this specific pallet
+          return await SupabaseService.instance.getPalletItemsById(palletId);
+        }
+      },
+      errorMessage: 'Failed to load pallet items',
       defaultValue: [],
     );
   }
@@ -201,34 +258,6 @@ class DataRepository with ChangeNotifier {
     }
   }
 
-  // Pallets from Supabase
-  Future<List<Pallet>> _loadPalletsFromSupabase() async {
-    try {
-      debugPrint('REPOSITORY: Loading pallets directly from Supabase');
-      if (SupabaseService.instance.currentUser == null) {
-        debugPrint('REPOSITORY: Cannot load pallets from Supabase: User not authenticated');
-        return [];
-      }
-      
-      debugPrint('REPOSITORY: User authenticated, attempting to get pallets from Supabase');
-      final pallets = await SupabaseService.instance.getPallets();
-      debugPrint('REPOSITORY: Loaded ${pallets.length} pallets from Supabase');
-      
-      // Log first pallet for debugging
-      if (pallets.isNotEmpty) {
-        final firstPallet = pallets.first;
-        debugPrint('REPOSITORY: First pallet: ${firstPallet.name} with ${firstPallet.items.length} items');
-      }
-      
-      return pallets;
-    } catch (e) {
-      debugPrint('REPOSITORY: Error loading pallets from Supabase: $e');
-      // Include stack trace for better debugging
-      debugPrint('REPOSITORY: Stack trace: ${StackTrace.current}');
-      return [];
-    }
-  }
-
   // Save pallets to the current data source
   Future<void> savePallets(List<Pallet> pallets) async {
     await _performOperation(
@@ -278,9 +307,20 @@ class DataRepository with ChangeNotifier {
           await _savePalletsToSharedPreferences(pallets);
           debugPrint('Removed pallet ${pallet.id} from SharedPreferences');
         } else {
-          // For Supabase, we need to delete the pallet
-          debugPrint('Removing pallet ${pallet.id} from Supabase');
-          await SupabaseService.instance.deletePallet(pallet.id);
+          // For Supabase, we need to delete the pallet using the supabaseId if available
+          debugPrint('Removing pallet from Supabase, originalId: ${pallet.id}, supabaseId: ${pallet.supabaseId}');
+          if (pallet.supabaseId != null) {
+            // Use the direct Supabase ID if available
+            await SupabaseService.instance.client
+              .from('pallets')
+              .delete()
+              .eq('id', pallet.supabaseId);
+            debugPrint('Deleted pallet using supabaseId: ${pallet.supabaseId}');
+          } else {
+            // Fall back to looking up by original_id
+            await SupabaseService.instance.deletePallet(pallet.id);
+            debugPrint('Deleted pallet using original_id: ${pallet.id}');
+          }
         }
       },
       errorMessage: 'Failed to remove pallet',
@@ -296,18 +336,42 @@ class DataRepository with ChangeNotifier {
           final palletIndex = pallets.indexWhere((p) => p.id == palletId);
           
           if (palletIndex >= 0) {
-            pallets[palletIndex].items.removeWhere((i) => i.id == itemId);
+            final pallet = pallets[palletIndex];
+            pallet.items.removeWhere((item) => item.id == itemId);
             await _savePalletsToSharedPreferences(pallets);
-            debugPrint('Removed item $itemId from pallet $palletId in SharedPreferences');
           }
         } else {
-          // For Supabase, we need to find the pallet first, then delete the item
-          debugPrint('Removing item $itemId from pallet $palletId in Supabase');
-          await SupabaseService.instance.deletePalletItem(palletId, itemId);
+          // Find the pallet first
+          final pallet = await _findPalletById(palletId);
+          if (pallet == null) {
+            debugPrint('REPOSITORY: Cannot find pallet with ID $palletId');
+            return;
+          }
+          
+          // If we have the supabaseId, use it directly
+          if (pallet.supabaseId != null) {
+            await SupabaseService.instance.client
+              .from('pallet_items')
+              .delete()
+              .eq('pallet_id', pallet.supabaseId)
+              .eq('original_id', itemId);
+            debugPrint('REPOSITORY: Deleted item using pallet supabaseId: ${pallet.supabaseId}');
+          } else {
+            // Fall back to the old method
+            await SupabaseService.instance.deletePalletItem(palletId, itemId);
+            debugPrint('REPOSITORY: Deleted item using pallet original_id: $palletId');
+          }
         }
       },
       errorMessage: 'Failed to remove pallet item',
     );
+  }
+  
+  // Helper method to find a pallet by ID (used by removePalletItem)
+  Future<Pallet?> _findPalletById(int palletId) async {
+    final pallets = await loadPallets();
+    final palletIndex = pallets.indexWhere((p) => p.id == palletId);
+    return palletIndex >= 0 ? pallets[palletIndex] : null;
   }
 
   // TAGS
@@ -625,33 +689,46 @@ class DataRepository with ChangeNotifier {
   }
 
   // Update a pallet
-  Future<void> updatePallet(int palletId, Map<String, dynamic> updateData) async {
+  Future<void> updatePallet(Pallet pallet) async {
     await _performOperation(
       operation: () async {
         if (_dataSource == DataSource.sharedPreferences) {
           final pallets = await _loadPalletsFromSharedPreferences();
-          final palletIndex = pallets.indexWhere((p) => p.id == palletId);
+          final index = pallets.indexWhere((p) => p.id == pallet.id);
           
-          if (palletIndex >= 0) {
-            // Update fields based on updateData
-            if (updateData.containsKey('name')) {
-              pallets[palletIndex].name = updateData['name'];
-            }
-            if (updateData.containsKey('tag')) {
-              pallets[palletIndex].tag = updateData['tag'];
-            }
-            if (updateData.containsKey('is_closed')) {
-              pallets[palletIndex].isClosed = updateData['is_closed'];
-            }
-            
+          if (index >= 0) {
+            pallets[index] = pallet;
             await _savePalletsToSharedPreferences(pallets);
           }
         } else {
-          await SupabaseService.instance.client
-            .from('pallets')
-            .update(updateData)
-            .eq('original_id', palletId)
-            .eq('user_id', SupabaseService.instance.currentUser!.id);
+          // For Supabase, update the pallet using the supabaseId if available
+          if (pallet.supabaseId != null) {
+            await SupabaseService.instance.client
+              .from('pallets')
+              .update({
+                'name': pallet.name,
+                'tag': pallet.tag,
+                'total_cost': pallet.totalCost,
+                'date': pallet.date.toIso8601String(),
+                'is_closed': pallet.isClosed,
+              })
+              .eq('id', pallet.supabaseId);
+            debugPrint('REPOSITORY: Updated pallet using supabaseId: ${pallet.supabaseId}');
+          } else {
+            // Fall back to using original_id
+            await SupabaseService.instance.client
+              .from('pallets')
+              .update({
+                'name': pallet.name,
+                'tag': pallet.tag,
+                'total_cost': pallet.totalCost,
+                'date': pallet.date.toIso8601String(),
+                'is_closed': pallet.isClosed,
+              })
+              .eq('original_id', pallet.id)
+              .eq('user_id', SupabaseService.instance.currentUser!.id);
+            debugPrint('REPOSITORY: Updated pallet using original_id: ${pallet.id}');
+          }
         }
       },
       errorMessage: 'Failed to update pallet',
@@ -659,7 +736,7 @@ class DataRepository with ChangeNotifier {
   }
 
   // Update a pallet item
-  Future<void> updatePalletItem(int palletId, int itemId, Map<String, dynamic> updateData) async {
+  Future<void> updatePalletItem(int palletId, PalletItem item) async {
     await _performOperation(
       operation: () async {
         if (_dataSource == DataSource.sharedPreferences) {
@@ -667,48 +744,63 @@ class DataRepository with ChangeNotifier {
           final palletIndex = pallets.indexWhere((p) => p.id == palletId);
           
           if (palletIndex >= 0) {
-            final itemIndex = pallets[palletIndex].items.indexWhere((i) => i.id == itemId);
+            final pallet = pallets[palletIndex];
+            final itemIndex = pallet.items.indexWhere((i) => i.id == item.id);
             
             if (itemIndex >= 0) {
-              final item = pallets[palletIndex].items[itemIndex];
-              
-              // Update fields based on updateData
-              if (updateData.containsKey('name')) {
-                item.name = updateData['name'];
-              }
-              if (updateData.containsKey('is_sold')) {
-                item.isSold = updateData['is_sold'];
-              }
-              if (updateData.containsKey('sale_price')) {
-                item.salePrice = updateData['sale_price'];
-              }
-              if (updateData.containsKey('sale_date') && updateData['sale_date'] != null) {
-                item.saleDate = DateTime.parse(updateData['sale_date']);
-              }
-              if (updateData.containsKey('allocated_cost')) {
-                item.allocatedCost = updateData['allocated_cost'];
-              }
-              
+              pallet.items[itemIndex] = item;
               await _savePalletsToSharedPreferences(pallets);
             }
           }
         } else {
-          // Find the Supabase pallet ID first
-          final palletResponse = await SupabaseService.instance.client
-            .from('pallets')
-            .select('id')
-            .eq('original_id', palletId)
-            .eq('user_id', SupabaseService.instance.currentUser!.id)
-            .single();
-            
-          final supabasePalletId = palletResponse['id'];
+          // Find the pallet first to get the supabaseId
+          final pallet = await _findPalletById(palletId);
+          if (pallet == null) {
+            debugPrint('REPOSITORY: Cannot find pallet with ID $palletId');
+            return;
+          }
           
-          // Update the item
-          await SupabaseService.instance.client
-            .from('pallet_items')
-            .update(updateData)
-            .eq('pallet_id', supabasePalletId)
-            .eq('original_id', itemId);
+          // Prepare update data
+          final updateData = {
+            'name': item.name,
+            'description': item.name,
+            'sale_price': item.salePrice,
+            'is_sold': item.isSold,
+            'sale_date': item.saleDate?.toIso8601String(),
+            'allocated_cost': item.allocatedCost,
+            'retail_price': item.retailPrice,
+            'condition': item.condition,
+            'list_price': item.listPrice,
+            'product_code': item.productCode,
+          };
+          
+          if (pallet.supabaseId != null) {
+            // Use the direct Supabase ID if available
+            await SupabaseService.instance.client
+              .from('pallet_items')
+              .update(updateData)
+              .eq('pallet_id', pallet.supabaseId)
+              .eq('original_id', item.id);
+            debugPrint('REPOSITORY: Updated item using pallet supabaseId: ${pallet.supabaseId}');
+          } else {
+            // First find the Supabase pallet ID
+            final response = await SupabaseService.instance.client
+              .from('pallets')
+              .select('id')
+              .eq('original_id', palletId)
+              .eq('user_id', SupabaseService.instance.currentUser!.id)
+              .single();
+              
+            final supabasePalletId = response['id'];
+            
+            // Then update the item
+            await SupabaseService.instance.client
+              .from('pallet_items')
+              .update(updateData)
+              .eq('pallet_id', supabasePalletId)
+              .eq('original_id', item.id);
+            debugPrint('REPOSITORY: Updated item using pallet original_id: $palletId');
+          }
         }
       },
       errorMessage: 'Failed to update pallet item',
@@ -896,4 +988,5 @@ class DataRepository with ChangeNotifier {
       rethrow;
     }
   }
+} 
 } 
