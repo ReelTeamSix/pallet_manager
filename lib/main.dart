@@ -15,6 +15,16 @@ import 'theme/app_theme.dart'; // Import app theme
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
 
+enum AppState {
+  initializing,
+  needsAuth,
+  checkingMigration,
+  needsMigration,
+  ready,
+  migrating,
+  error
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
@@ -58,527 +68,188 @@ class PalletApp extends StatefulWidget {
 }
 
 class _PalletAppState extends State<PalletApp> {
-  bool _isAuthenticated = false;
-  bool _showMigrationScreen = false;
-  bool _isMigrationCheckInProgress = false;
-  bool _hasCheckedMigration = false;
-  bool _isLoading = false;
-  bool _isCheckingMigration = false;
-  bool _migrationInProgress = false;
-  bool _isInitializing = false;
-  bool _isInitialized = false;
-  String _errorMessage = '';
-  // Track if we've already assigned the model
-  bool _hasAssignedModel = false;
+  late final PalletModel _model;
+  late final DataRepository _repository;
+  late final AuthService _authService;
   
-  // Add property references to avoid undefined getter errors
-  late PalletModel model;
-  late SupabaseService supabase;
+  AppState _appState = AppState.initializing;
+  String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
-    _isInitializing = true;
-    _isInitialized = false;
-    
-    // Initialize Supabase reference safely
-    supabase = SupabaseService.instance;
-    
-    // Use a microtask to ensure we're outside the build phase
-    Future.microtask(() {
-      // Initialize model safely after the first frame
-      model = Provider.of<PalletModel>(context, listen: false);
-      _initializeApp();
-    });
+    _repository = DataRepository();
+    _model = PalletModel(_repository);
+    _authService = AuthService();
+    _initializeApp();
   }
 
   Future<void> _initializeApp() async {
-    if (!mounted) return;
-    
-    debugPrint('Initializing app...');
-    setState(() {
-      _isInitializing = true;
-      _isInitialized = false;
-    });
-    
     try {
-      // Initialize PalletModel first
-      await model.initialize();
-      debugPrint('PalletModel initialized');
+      setState(() => _appState = AppState.initializing);
       
-      // Check if the user is logged in to Supabase
-      final user = supabase.currentUser; // Using the correct getter
-      final isLoggedIn = user != null;
-      
-      // Update authentication state
-      setState(() {
-        _isAuthenticated = isLoggedIn;
+      // Set up auth state listener
+      _authService.authStateChanges.listen((AuthState state) {
+        debugPrint('APP: Auth state changed: ${state.event}');
+        
+        if (state.event == AuthChangeEvent.signedIn) {
+          _handleUserSignIn(state.session?.user);
+        } else if (state.event == AuthChangeEvent.signedOut) {
+          _handleUserSignOut();
+        }
       });
-      
-      // If the user is authenticated, check if we need to show the migration screen
-      if (isLoggedIn) {
-        debugPrint('User is authenticated, checking migration status');
-        await _checkMigrationStatus();
+
+      // Check if user is already signed in
+      final currentUser = _authService.currentUser;
+      if (currentUser != null) {
+        await _handleUserSignIn(currentUser);
+      } else {
+        setState(() => _appState = AppState.needsAuth);
       }
-      
-      // Mark initialization as complete
-      setState(() {
-        _isInitializing = false;
-        _isInitialized = true;
-      });
-      
-      debugPrint('App initialization complete. Auth: $_isAuthenticated, Migration: $_showMigrationScreen');
     } catch (e) {
-      debugPrint('Error during app initialization: $e');
-      
-      // Ensure we update state even if there's an error
+      debugPrint('APP: Error during initialization: $e');
       setState(() {
-        _isInitializing = false;
-        _isInitialized = true; // Still mark as initialized so app doesn't get stuck
+        _appState = AppState.error;
+        _errorMessage = 'Failed to initialize app: $e';
+      });
+    }
+  }
+
+  Future<void> _handleUserSignIn(User? user) async {
+    if (user == null) {
+      setState(() => _appState = AppState.needsAuth);
+      return;
+    }
+
+    try {
+      setState(() => _appState = AppState.checkingMigration);
+      
+      // Ensure user profile exists
+      await _authService.ensureUserProfileExists(user.id, user.email!);
+      
+      // Check migration status
+      await _checkMigrationStatus();
+    } catch (e) {
+      debugPrint('APP: Error handling user sign in: $e');
+      setState(() {
+        _appState = AppState.error;
+        _errorMessage = 'Failed to handle sign in: $e';
+      });
+    }
+  }
+
+  Future<void> _handleUserSignOut() async {
+    try {
+      // Clear model data
+      _model.clearAllData();
+      
+      // Reset repository
+      await _repository.resetMigrationStatus();
+      _repository.setDataSource(DataSource.sharedPreferences);
+      
+      setState(() => _appState = AppState.needsAuth);
+    } catch (e) {
+      debugPrint('APP: Error handling user sign out: $e');
+      setState(() {
+        _appState = AppState.error;
+        _errorMessage = 'Failed to handle sign out: $e';
       });
     }
   }
 
   Future<void> _checkMigrationStatus() async {
-    if (!mounted) return;
-    
-    // Skip migration check if it's already in progress or user isn't authenticated
-    if (_migrationInProgress || !_isAuthenticated) {
-      debugPrint('Skipping migration check: inProgress=$_migrationInProgress, authenticated=$_isAuthenticated');
-      return;
-    }
-    
-    debugPrint('Checking migration status - starting the check process');
-    
     try {
-      // Set migration in progress flag to prevent concurrent checks
-      _migrationInProgress = true;
-      debugPrint('Set _migrationInProgress=true to prevent concurrent checks');
+      final hasMigrated = await _repository.hasMigratedData;
       
-      // Force a data reload to ensure we have the latest state
-      await model.forceDataReload();
-      
-      // Check if we've already migrated data
-      final hasAlreadyMigrated = model.dataRepository.hasMigratedData;
-      debugPrint('Has already migrated: $hasAlreadyMigrated');
-      
-      if (hasAlreadyMigrated) {
-        debugPrint('Data has already been migrated, switching to Supabase mode');
-        
-        // Data has been migrated, make sure we're using Supabase
-        if (model.dataRepository.dataSource != DataSource.supabase) {
-          debugPrint('Switching to Supabase as data source is currently: ${model.dataRepository.dataSource}');
-          await model.dataRepository.setDataSource(DataSource.supabase);
-        }
-        
-        setState(() {
-          _showMigrationScreen = false;
-          debugPrint('Set _showMigrationScreen=false because data is already migrated');
-        });
-        
-        return;
+      if (hasMigrated) {
+        debugPrint('APP: Data already migrated, switching to Supabase');
+        _repository.setDataSource(DataSource.supabase);
+        await _model.initialize();
+        setState(() => _appState = AppState.ready);
+      } else {
+        debugPrint('APP: Data needs migration');
+        setState(() => _appState = AppState.needsMigration);
       }
-      
-      // Check if migration is needed by asking the model
-      final needsMigration = await model.checkAndPrepareMigration();
-      
-      debugPrint('Migration needed according to model.checkAndPrepareMigration(): $needsMigration');
-      
-      // Update state based on migration check
-      setState(() {
-        _showMigrationScreen = needsMigration;
-        debugPrint('Updated _showMigrationScreen=$needsMigration based on migration check');
-      });
     } catch (e) {
-      debugPrint('Error checking migration status: $e');
-    } finally {
-      // Clear the migration in progress flag
-      _migrationInProgress = false;
-      debugPrint('Reset _migrationInProgress=false to allow future checks');
+      debugPrint('APP: Error checking migration status: $e');
+      setState(() {
+        _appState = AppState.error;
+        _errorMessage = 'Failed to check migration status: $e';
+      });
     }
   }
 
-  // Handle migration complete callback from migration screen
-  void _handleMigrationComplete() async {
-    if (!mounted) return;
-    
-    debugPrint('MIGRATION: Migration complete callback received');
-    
+  Future<void> _handleMigrationComplete() async {
     try {
-      // Set loading state to prevent UI flicker
-      setState(() {
-        _isLoading = true;
-      });
+      setState(() => _appState = AppState.initializing);
       
-      // Make sure we have current model reference
-      model = Provider.of<PalletModel>(context, listen: false);
+      // Repository will handle setting migration flag and data source
+      await _repository.migrateDataToSupabase();
       
-      // Force the data repository to recognize migration is complete
-      debugPrint('MIGRATION: Forcing data reload to update migration status');
-      await model.dataRepository.forceDataReload();
+      // Initialize model with new data source
+      await _model.initialize();
       
-      // Explicitly set data source to Supabase
-      debugPrint('MIGRATION: Explicitly setting data source to Supabase');
-      await model.dataRepository.setDataSource(DataSource.supabase);
-      
-      // Reinitialize data repository with Supabase as the source
-      debugPrint('MIGRATION: Reinitializing data repository with Supabase');
-      await model.dataRepository.initialize(DataSource.supabase);
-      
-      // Force reload data from new source
-      debugPrint('MIGRATION: Reloading data from Supabase');
-      // Clear existing data first
-      await model.clearAllData();
-      // Then reload from Supabase
-      await model.loadData();
-      
-      // Update app state - turn off migration flags
-      setState(() {
-        _showMigrationScreen = false;
-        _migrationInProgress = false;
-        _isLoading = false;
-      });
-      
-      debugPrint('MIGRATION: Migration complete process finished, updated app state (_showMigrationScreen=$_showMigrationScreen, _migrationInProgress=$_migrationInProgress)');
+      setState(() => _appState = AppState.ready);
     } catch (e) {
-      debugPrint('MIGRATION: Error handling migration complete: $e');
-      
-      // Even on error, ensure we reset the flags
+      debugPrint('APP: Error handling migration completion: $e');
       setState(() {
-        _migrationInProgress = false;
-        _isLoading = false;
+        _appState = AppState.error;
+        _errorMessage = 'Failed to complete migration: $e';
       });
     }
-  }
-
-  void _setupAuthStateListener() {
-    SupabaseService.instance.authStateChange.listen((data) async {
-      if (!mounted) return;
-      
-      final isNowAuthenticated = data.session != null;
-      final newUserId = data.session?.user.id;
-      final previousUserId = SupabaseService.instance.previousUserId;
-      final userChanged = isNowAuthenticated && newUserId != previousUserId && previousUserId != null;
-      
-      // Update the stored user ID
-      if (isNowAuthenticated) {
-        SupabaseService.instance.updatePreviousUserId(newUserId!);
-      }
-      
-      // Handle sign in/sign out state change
-      if (_isAuthenticated != isNowAuthenticated || userChanged) {
-        setState(() {
-          _isAuthenticated = isNowAuthenticated;
-          
-          if (!isNowAuthenticated || userChanged) {
-            _showMigrationScreen = false;
-            _hasCheckedMigration = false;
-          }
-        });
-        
-        // If signed out or user changed, clear data
-        if (!isNowAuthenticated || userChanged) {
-          final palletModel = Provider.of<PalletModel>(context, listen: false);
-          await palletModel.clearAllData();
-          
-          // If user changed (not just signed out)
-          if (userChanged) {
-            debugPrint('User changed from $previousUserId to $newUserId - clearing data and reloading');
-            final dataRepository = Provider.of<DataRepository>(context, listen: false);
-            await dataRepository.resetMigrationStatus();
-            
-            // Set flag to show we detected a user change
-            SupabaseService.instance.setUserChanged(true);
-          }
-        }
-        
-        if (isNowAuthenticated) {
-          await Future.delayed(const Duration(milliseconds: 100));
-          _checkMigrationStatus();
-        }
-      }
-    });
-  }
-
-  void _handleAuthSuccess() {
-    if (!mounted) return;
-    
-    setState(() {
-      _isAuthenticated = true;
-      _hasCheckedMigration = false;
-      _isLoading = true;
-    });
-    
-    Future.microtask(() async {
-      if (mounted) {
-        try {
-          // Make sure model is initialized
-          if (!_hasAssignedModel) {
-            model = Provider.of<PalletModel>(context, listen: false);
-            _hasAssignedModel = true;
-          }
-          
-          // Clear any existing data first to prevent data leakage between users
-          await model.clearAllData();
-          
-          // Check if this user has already migrated
-          final dataRepository = model.dataRepository;
-          
-          // If this is a different user than before, reset migration status
-          if (supabase.hasUserChanged()) {
-            debugPrint('New user detected during auth, resetting migration status');
-            await dataRepository.resetMigrationStatus();
-            supabase.setUserChanged(false);
-          }
-          
-          await dataRepository.initialize(DataSource.sharedPreferences);
-          
-          final hasMigrated = dataRepository.hasMigratedData;
-          if (hasMigrated) {
-            // If already migrated, force to use Supabase
-            debugPrint('User has already migrated, forcing Supabase data source');
-            await dataRepository.initialize(DataSource.supabase);
-            
-            // Load data via the initialize method instead of directly calling forceDataReload
-            await model.initialize();
-            debugPrint('Initialized PalletModel with data from Supabase');
-          } else {
-            // Initialize with SharedPreferences data
-            await model.initialize();
-          }
-          
-          // Check migration status last
-          await _checkMigrationStatus();
-        } catch (e) {
-          debugPrint('Error during auth success handling: $e');
-        } finally {
-          // Make sure to end loading state
-          if (mounted) {
-            setState(() {
-              _isLoading = false;
-            });
-          }
-        }
-      }
-    });
-  }
-
-  void _handleSignOut() async {
-    debugPrint('Sign out initiated');
-    
-    try {
-      // Update authentication state
-      setState(() {
-        _isAuthenticated = false;
-        _showMigrationScreen = false;
-      });
-      
-      // Clear model data
-      final palletModel = Provider.of<PalletModel>(context, listen: false);
-      await palletModel.clearAllData();
-      
-      // Ensure we're using local data source after sign out
-      await palletModel.dataRepository.setDataSource(DataSource.sharedPreferences);
-      
-      // Schedule a navigation to login screen with microtask to ensure state is updated first
-      Future.microtask(() {
-        if (mounted) {
-          debugPrint('Navigating to login screen after sign-out');
-          Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
-        }
-      });
-      
-      debugPrint('Sign out complete');
-    } catch (e) {
-      debugPrint('Error during sign out: $e');
-    }
-  }
-
-  Widget _buildErrorWidget(FlutterErrorDetails errorDetails) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Error')),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.error_outline, color: Colors.red, size: 60),
-              const SizedBox(height: 16),
-              Text(
-                'An error occurred',
-                style: Theme.of(context).textTheme.headlineSmall,
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'The application encountered an unexpected error.',
-                textAlign: TextAlign.center,
-              ),
-              if (errorDetails.exception.toString().isNotEmpty) ...[
-                const SizedBox(height: 16),
-                Text(
-                  'Error details:',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                const SizedBox(height: 4),
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade200,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  width: double.infinity,
-                  child: Text(
-                    errorDetails.exception.toString(),
-                    style: const TextStyle(fontFamily: 'monospace'),
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildScreen(BuildContext context, PalletModel palletModel) {
-    // Ensure we're using the latest model instance
-    if (!_hasAssignedModel) {
-      model = palletModel;
-      _hasAssignedModel = true;
-    }
-    
-    // Special case handling - if we've already decided to show the migration screen,
-    // we need to keep showing it regardless of temporary loading states
-    if (_showMigrationScreen) {
-      debugPrint('Main: Showing migration screen (prioritized since _showMigrationScreen=true)');
-      return DataMigrationScreen(
-        palletModel: palletModel,
-        savedTags: palletModel.getAllTags(),
-        onMigrationComplete: _handleMigrationComplete,
-      );
-    }
-    
-    // Standard loading state handling
-    if (palletModel.isLoading || _isLoading || _isCheckingMigration) {
-      debugPrint('Main: Showing loading screen due to: palletModel.isLoading=${palletModel.isLoading}, _isLoading=$_isLoading, _isCheckingMigration=$_isCheckingMigration');
-      return const Scaffold(
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              CircularProgressIndicator(),
-              SizedBox(height: 16),
-              Text("Loading your data...", style: TextStyle(fontSize: 16)),
-            ],
-          ),
-        ),
-      );
-    }
-    
-    // Finally, show home or auth screen
-    debugPrint('Main: Showing ${_isAuthenticated ? "home" : "auth"} screen');
-    return _isAuthenticated
-        ? const HomeScreen()
-        : AuthScreen(onAuthSuccess: _handleAuthSuccess);
   }
 
   @override
   Widget build(BuildContext context) {
-    final mediaQuery = MediaQuery.of(context);
-    final isTablet = mediaQuery.size.shortestSide >= 600;
-
-    return AppLifecycleManager(
-      child: MaterialApp(
-        title: 'Pallet Pro',
-        builder: (context, child) {
-          ErrorWidget.builder = _buildErrorWidget;
-
-          final mediaQueryData = MediaQuery.of(context);
-          final constrainedTextScaler = TextScaler.linear(
-              mediaQueryData.textScaler.scale(1.0).clamp(0.8, 1.5));
-
-          return MediaQuery(
-            data: mediaQueryData.copyWith(textScaler: constrainedTextScaler),
-            child: child!,
-          );
-        },
-        theme: AppTheme.getTheme(
-            isTablet: isTablet, brightness: Brightness.light),
-        onGenerateRoute: (settings) => MaterialPageRoute(
-          settings: settings,
-          builder: (context) {
-            // Make sure the model is initialized when navigating
-            if (!_hasAssignedModel) {
-              model = Provider.of<PalletModel>(context, listen: false);
-              _hasAssignedModel = true;
-            }
-            
-            // First handle special cases like initialization or login
-            if (_isInitializing) {
-              return _buildLoadingScreen();
-            }
-            
-            if (!_isInitialized) {
-              return _buildErrorScreen();
-            }
-            
-            if (!_isAuthenticated) {
-              return AuthScreen(onAuthSuccess: _handleAuthSuccess);
-            }
-            
-            // Then handle normal routes
-            switch (settings.name) {
-              case '/inventory':
-                return const inventory.InventoryScreen();
-              case '/analytics':
-                return const AnalyticsScreen();
-              case '/settings':
-                return const SettingsScreen();
-              case '/login':
-                return AuthScreen(onAuthSuccess: _handleAuthSuccess);
-              default:
-                return _buildHomeScreen(context);
-            }
-          },
-        ),
-        home: Consumer<PalletModel>(
-          builder: (context, palletModel, _) {
-            // First handle initialization, error, auth states
-            if (_isInitializing) {
-              return _buildLoadingScreen();
-            }
-            
-            if (!_isInitialized) {
-              return _buildErrorScreen();
-            }
-            
-            if (!_isAuthenticated) {
-              return AuthScreen(onAuthSuccess: _handleAuthSuccess);
-            }
-            
-            return _buildScreen(context, palletModel);
-          },
-        ),
+    return MaterialApp(
+      title: 'Pallet Manager',
+      theme: ThemeData(
+        primarySwatch: Colors.blue,
+        useMaterial3: true,
       ),
+      home: _buildContent(),
     );
   }
 
-  Widget _buildLoadingScreen() {
+  Widget _buildContent() {
+    switch (_appState) {
+      case AppState.initializing:
+        return _buildLoadingScreen();
+      case AppState.needsAuth:
+        return AuthScreen(
+          onSignIn: (email, password) => _authService.signInWithEmail(email, password),
+          onSignUp: (email, password) => _authService.signUpWithEmail(email, password),
+        );
+      case AppState.checkingMigration:
+        return _buildLoadingScreen(message: 'Checking data status...');
+      case AppState.needsMigration:
+        return DataMigrationScreen(
+          onMigrationComplete: _handleMigrationComplete,
+        );
+      case AppState.ready:
+        return HomeScreen();
+      case AppState.migrating:
+        return _buildLoadingScreen(message: 'Migrating data...');
+      case AppState.error:
+        return _buildErrorScreen();
+    }
+  }
+
+  Widget _buildLoadingScreen({String message = 'Loading...'}) {
     return Scaffold(
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const CircularProgressIndicator(),
-            const SizedBox(height: 20),
-            Text('Initializing app...', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 16),
+            Text(message),
           ],
         ),
       ),
     );
   }
-  
+
   Widget _buildErrorScreen() {
     return Scaffold(
       body: Center(
@@ -587,21 +258,19 @@ class _PalletAppState extends State<PalletApp> {
           children: [
             const Icon(Icons.error_outline, color: Colors.red, size: 48),
             const SizedBox(height: 16),
-            Text('Failed to initialize app', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 8),
+            Text(
+              _errorMessage ?? 'An unknown error occurred',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.red),
+            ),
+            const SizedBox(height: 16),
             ElevatedButton(
-              onPressed: _checkMigrationStatus,
-              child: const Text('RETRY'),
+              onPressed: _initializeApp,
+              child: const Text('Retry'),
             ),
           ],
         ),
       ),
-    );
-  }
-  
-  Widget _buildHomeScreen(BuildContext context) {
-    return Consumer<PalletModel>(
-      builder: (context, palletModel, _) => _buildScreen(context, palletModel),
     );
   }
 }

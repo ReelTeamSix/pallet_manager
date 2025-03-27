@@ -431,19 +431,35 @@ class DataRepository with ChangeNotifier {
 
   // MIGRATION
 
+  // Add this method at the top of the class
+  String _getUserFriendlyError(String errorCode, String message) {
+    switch (errorCode) {
+      case '42501':
+        return 'Permission denied. Please check your account settings.';
+      case '23503':
+        return 'Data error: Related information is missing. Please try again.';
+      case '23505':
+        return 'This item already exists.';
+      case '42P01':
+        return 'Database error: Table not found. Please contact support.';
+      default:
+        return 'An error occurred: $message';
+    }
+  }
+
   // Migrate data from SharedPreferences to Supabase - THIS IS A ONE-WAY OPERATION
   Future<void> migrateDataToSupabase() async {
     if (_isLoading) return;
     
     // If already migrated, don't do it again
     if (_hasMigratedData) {
-      debugPrint('Data already migrated, skipping migration');
+      debugPrint('REPOSITORY: Data already migrated, skipping migration');
       return;
     }
     
     await _performOperation(
       operation: () async {
-        debugPrint('🚀 Starting one-way migration to Supabase...');
+        debugPrint('REPOSITORY: Starting one-way migration to Supabase...');
         
         // Check authentication
         if (!isAuthenticated) {
@@ -456,18 +472,58 @@ class DataRepository with ChangeNotifier {
 
         // Check if there's data to migrate
         if (pallets.isEmpty && tags.isEmpty) {
-          debugPrint('No data to migrate, setting migration flag and switching to Supabase');
+          debugPrint('REPOSITORY: No data to migrate, setting migration flag and switching to Supabase');
         } else {
-          debugPrint('Migrating data from SharedPreferences to Supabase...');
-          debugPrint('- ${pallets.length} pallets with ${pallets.fold(0, (sum, p) => sum + p.items.length)} items');
-          debugPrint('- ${tags.length} tags');
+          debugPrint('REPOSITORY: Migrating data from SharedPreferences to Supabase...');
+          debugPrint('REPOSITORY: - ${pallets.length} pallets with ${pallets.fold(0, (sum, p) => sum + p.items.length)} items');
+          debugPrint('REPOSITORY: - ${tags.length} tags');
           
           try {
-            // Migrate data
-            await SupabaseService.instance.migrateSharedPreferencesToSupabase(pallets, tags);
-            debugPrint('✅ Data migration completed successfully');
+            // Migrate tags first
+            for (final tag in tags) {
+              try {
+                await SupabaseService.instance.createTag(tag);
+              } catch (e) {
+                debugPrint('REPOSITORY: Error migrating tag $tag: $e');
+                // Continue with next tag if this one fails
+              }
+            }
+
+            // Migrate pallets in batches
+            const batchSize = 50;
+            for (var i = 0; i < pallets.length; i += batchSize) {
+              final batch = pallets.skip(i).take(batchSize).toList();
+              debugPrint('REPOSITORY: Migrating batch ${(i ~/ batchSize) + 1} of ${(pallets.length / batchSize).ceil()}');
+              
+              for (final pallet in batch) {
+                try {
+                  // Create pallet
+                  final palletResponse = await SupabaseService.instance.createPallet(pallet);
+                  final supabasePalletId = palletResponse['id'];
+                  
+                  // Migrate items in smaller batches
+                  const itemBatchSize = 20;
+                  for (var j = 0; j < pallet.items.length; j += itemBatchSize) {
+                    final itemBatch = pallet.items.skip(j).take(itemBatchSize).toList();
+                    for (final item in itemBatch) {
+                      try {
+                        await SupabaseService.instance.createPalletItem(item, supabasePalletId);
+                      } catch (e) {
+                        debugPrint('REPOSITORY: Error migrating item ${item.id} for pallet ${pallet.id}: $e');
+                        // Continue with next item if this one fails
+                      }
+                    }
+                  }
+                } catch (e) {
+                  debugPrint('REPOSITORY: Error migrating pallet ${pallet.id}: $e');
+                  // Continue with next pallet if this one fails
+                }
+              }
+            }
+            
+            debugPrint('REPOSITORY: Data migration completed successfully');
           } catch (e) {
-            debugPrint('⚠️ Error during data migration: $e');
+            debugPrint('REPOSITORY: Error during data migration: $e');
             rethrow;
           }
         }
@@ -475,9 +531,9 @@ class DataRepository with ChangeNotifier {
         // Set migration flag - THIS SHOULD ONLY HAPPEN ONCE
         _hasMigratedData = true;
         final prefs = await SharedPreferences.getInstance();
-        debugPrint('📝 Setting migration flag in SharedPreferences...');
+        debugPrint('REPOSITORY: Setting migration flag in SharedPreferences...');
         await prefs.setBool('has_migrated_data', true);
-        debugPrint('✅ Migration flag set successfully');
+        debugPrint('REPOSITORY: Migration flag set successfully');
         
         // Switch to Supabase permanently - NO GOING BACK
         _dataSource = DataSource.supabase;
@@ -486,7 +542,7 @@ class DataRepository with ChangeNotifier {
         await _clearLocalData();
         
         notifyListeners();
-        debugPrint('🏁 Migration to Supabase complete - App is now in CLOUD-ONLY mode');
+        debugPrint('REPOSITORY: Migration to Supabase complete - App is now in CLOUD-ONLY mode');
       },
       errorMessage: 'Failed to migrate data to Supabase',
     );
@@ -507,10 +563,17 @@ class DataRepository with ChangeNotifier {
       notifyListeners();
       return result;
     } catch (e) {
-      _error = '$errorMessage: ${e.toString()}';
       _isLoading = false;
       notifyListeners();
-      debugPrint(_error);
+      
+      if (e is PostgrestException) {
+        debugPrint('REPOSITORY: Postgrest error - code: ${e.code}, message: ${e.message}, details: ${e.details}, hint: ${e.hint}');
+        _error = _getUserFriendlyError(e.code, e.message);
+      } else {
+        debugPrint('REPOSITORY: Operation error: $e');
+        _error = '$errorMessage: ${e.toString()}';
+      }
+      
       if (defaultValue != null) return defaultValue;
       rethrow;
     }
